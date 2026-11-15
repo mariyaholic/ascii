@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BatchModal } from './components/BatchModal';
 import { CharRampEditorModal } from './components/CharRampEditorModal';
 import { CRTCanvasViewport } from './components/CRTCanvasViewport';
 import { ExportModal } from './components/ExportModal';
@@ -11,6 +12,7 @@ import {
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PaletteEditorModal } from './components/PaletteEditorModal';
 import { PresetsModal } from './components/PresetsModal';
+import { SimpleControls } from './components/SimpleControls';
 import { StudioHeader } from './components/StudioHeader';
 import {
   BUILT_IN_CHAR_RAMPS,
@@ -20,6 +22,7 @@ import {
   SAMPLE_IMAGES,
 } from './data/presets';
 import { processImageBuffer } from './engine/imageProcessor';
+import { computeLocalAutoTune } from './engine/localAutoTuner';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
 import type {
   CharRampDefinition,
@@ -37,21 +40,49 @@ interface CachedSourcePixels {
   width: number;
   height: number;
   rgba: Uint8ClampedArray;
+  thumbnailBase64?: string;
 }
+
+type ControlComplexity = 'simple' | 'pro';
 
 function computeAutoFitColumns(imgWidth: number, imgHeight: number): number {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const maxDefault = isMobile ? 84 : 136;
   const minDefault = isMobile ? 48 : 64;
   const ratio = imgWidth / Math.max(1, imgHeight);
-  const suggested = Math.round(Math.min(imgWidth / 6, 112 * Math.sqrt(Math.min(1.8, Math.max(0.6, ratio)))));
+  const suggested = Math.round(
+    Math.min(imgWidth / 6, 112 * Math.sqrt(Math.min(1.8, Math.max(0.6, ratio))))
+  );
   return Math.max(minDefault, Math.min(maxDefault, suggested));
+}
+
+function createJpegThumbnailBase64(img: HTMLImageElement): string | undefined {
+  try {
+    const maxThumb = 360;
+    const scale = Math.min(1, maxThumb / Math.max(img.naturalWidth, img.naturalHeight));
+    const tw = Math.max(1, Math.round(img.naturalWidth * scale));
+    const th = Math.max(1, Math.round(img.naturalHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = tw;
+    canvas.height = th;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+    ctx.drawImage(img, 0, 0, tw, th);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.78);
+    return dataUrl.split(',')[1];
+  } catch {
+    return undefined;
+  }
 }
 
 export default function App() {
   const [settings, setSettings] = useLocalStorageState<RenderSettings>(
     'pg.settings.v1',
     DEFAULT_RENDER_SETTINGS
+  );
+  const [controlMode, setControlMode] = useLocalStorageState<ControlComplexity>(
+    'pg.controlMode.v1',
+    'simple'
   );
   const [phosphorTheme, setPhosphorTheme] = useLocalStorageState<PhosphorTheme>(
     'pg.phosphor.v1',
@@ -78,6 +109,13 @@ export default function App() {
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Smart Auto-Tune state
+  const [isAutoTuning, setIsAutoTuning] = useState(false);
+  const [tuneSummary, setTuneSummary] = useState<string | null>(null);
+  const [tuneSource, setTuneSource] = useState<'api' | 'local' | null>(null);
+  const [tuneError, setTuneError] = useState<string | null>(null);
+  const [undoSnapshot, setUndoSnapshot] = useState<RenderSettings | null>(null);
 
   const cachedPixelsRef = useRef<CachedSourcePixels | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -107,12 +145,10 @@ export default function App() {
     [allRamps, settings.charRampId]
   );
 
-  // Sync phosphor CRT theme token on <html>
   useEffect(() => {
     document.documentElement.setAttribute('data-phosphor', phosphorTheme);
   }, [phosphorTheme]);
 
-  // Initialize Web Worker for off-thread dithering & conversion
   useEffect(() => {
     try {
       const worker = new Worker(new URL('./workers/renderWorker.ts', import.meta.url), {
@@ -180,7 +216,6 @@ export default function App() {
     }
   }, [settings, activePalette, activeRamp]);
 
-  // Re-render whenever source pixels or settings change
   useEffect(() => {
     triggerRender();
   }, [triggerRender]);
@@ -188,6 +223,9 @@ export default function App() {
   const loadImageSource = useCallback(
     (id: string, name: string, src: string, isObjectUrl = false) => {
       setErrorMessage(null);
+      setTuneSummary(null);
+      setTuneSource(null);
+      setTuneError(null);
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -219,6 +257,7 @@ export default function App() {
           width: workW,
           height: workH,
           rgba: imageData.data,
+          thumbnailBase64: createJpegThumbnailBase64(img),
         };
 
         setSourceImage({
@@ -243,7 +282,6 @@ export default function App() {
     [setSettings]
   );
 
-  // Load initial sample image on mount
   useEffect(() => {
     const first = SAMPLE_IMAGES[0];
     loadImageSource(first.id, first.name, first.src);
@@ -273,7 +311,6 @@ export default function App() {
     [loadImageSource]
   );
 
-  // Global clipboard image paste (Ctrl/Cmd + V)
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -298,6 +335,93 @@ export default function App() {
     },
     [setSettings]
   );
+
+  // Smart Auto-Tune via server-side Gemini 4 Hydrogen with automatic offline/fallback local histogram analyzer
+  const handleAutoTune = useCallback(
+    async (goalPrompt?: string) => {
+      const cached = cachedPixelsRef.current;
+      if (!cached) return;
+
+      setUndoSnapshot({ ...settings });
+      setIsAutoTuning(true);
+      setTuneError(null);
+
+      const applyLocalFallback = (notice?: string) => {
+        const localRec = computeLocalAutoTune(
+          cached.rgba,
+          cached.width,
+          cached.height,
+          goalPrompt
+        );
+        setSettings((prev) => ({ ...prev, ...localRec.settings }));
+        setTuneSummary(localRec.summary);
+        setTuneSource('local');
+        if (notice) setTuneError(notice);
+      };
+
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        applyLocalFallback();
+        setIsAutoTuning(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/style-assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: cached.thumbnailBase64,
+            goalPrompt,
+            availablePalettes: allPalettes.map((p) => ({
+              id: p.id,
+              name: p.name,
+              colorCount: p.colors.length,
+            })),
+            availableRamps: allRamps.map((r) => ({ id: r.id, name: r.name })),
+          }),
+        });
+
+        if (!response.ok) {
+          const errPayload = await response.json().catch(() => ({}));
+          const notice =
+            errPayload?.code === 'API_KEY_MISSING'
+              ? undefined
+              : 'Model service busy — applied instant local image analysis instead.';
+          applyLocalFallback(notice);
+          return;
+        }
+
+        const data = (await response.json()) as {
+          summary?: string;
+          settings?: Partial<RenderSettings>;
+        };
+
+        if (data?.settings) {
+          setSettings((prev) => ({ ...prev, ...data.settings }));
+          setTuneSummary(
+            data.summary ?? 'Tuned dithering, tone, and color balance for this image.'
+          );
+          setTuneSource('api');
+        } else {
+          applyLocalFallback();
+        }
+      } catch {
+        applyLocalFallback('Network unavailable — applied instant local image analysis.');
+      } finally {
+        setIsAutoTuning(false);
+      }
+    },
+    [settings, allPalettes, allRamps, setSettings]
+  );
+
+  const handleUndoTune = () => {
+    if (!undoSnapshot) return;
+    setSettings(undoSnapshot);
+    setUndoSnapshot(null);
+    setTuneSummary(null);
+    setTuneSource(null);
+    setTuneError(null);
+  };
 
   const handleSavePalette = (palette: PaletteDefinition) => {
     setCustomPalettes((prev) => {
@@ -355,7 +479,39 @@ export default function App() {
       : DEFAULT_RENDER_SETTINGS.columns;
     setSettings({ ...DEFAULT_RENDER_SETTINGS, columns: cols });
     setPhosphorTheme('p31');
+    setTuneSummary(null);
+    setTuneSource(null);
+    setTuneError(null);
   };
+
+  const modeSwitcher = (
+    <div className="border-b border-[var(--pg-border)] bg-[var(--pg-surface)] p-3">
+      <div className="grid grid-cols-2 gap-1 rounded-md border border-[var(--pg-border)] bg-[var(--pg-well)] p-1">
+        <button
+          type="button"
+          onClick={() => setControlMode('simple')}
+          className={`min-h-[34px] rounded px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+            controlMode === 'simple'
+              ? 'bg-[var(--pg-accent)] text-[var(--pg-accent-ink)] font-semibold'
+              : 'text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
+          }`}
+        >
+          Guided (Simple)
+        </button>
+        <button
+          type="button"
+          onClick={() => setControlMode('pro')}
+          className={`min-h-[34px] rounded px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+            controlMode === 'pro'
+              ? 'bg-[var(--pg-accent)] text-[var(--pg-accent-ink)] font-semibold'
+              : 'text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
+          }`}
+        >
+          Pro Controls
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-[var(--pg-bg)] text-[var(--pg-text)]">
@@ -365,39 +521,60 @@ export default function App() {
         onOpenExport={() => setExportOpen(true)}
       />
 
-      {/* Main Responsive Workbench: Viewport + Desktop Inspector */}
       <main className="flex flex-1 min-h-0 overflow-hidden pb-14 lg:pb-0">
         <CRTCanvasViewport
           sourceImage={sourceImage}
           renderResult={renderResult}
           settings={settings}
+          activeRamp={activeRamp}
           isProcessing={isProcessing}
           errorMessage={errorMessage}
           onSelectFile={handleSelectFile}
           onSelectSample={handleSelectSample}
           onToggleCrt={() => handleUpdateSettings({ crtOverlay: !settings.crtOverlay })}
+          onUpdateSettings={handleUpdateSettings}
         />
 
         {/* Desktop Right Inspector Sidebar */}
         <aside
           aria-label="Render parameters"
-          className="hidden lg:block w-[340px] shrink-0 overflow-y-auto pg-scroll border-l border-[var(--pg-border)] bg-[var(--pg-surface)]"
+          className="hidden lg:flex lg:flex-col w-[348px] shrink-0 border-l border-[var(--pg-border)] bg-[var(--pg-surface)]"
         >
-          <InspectorControls
-            settings={settings}
-            phosphorTheme={phosphorTheme}
-            palettes={allPalettes}
-            charRamps={allRamps}
-            sourceImage={sourceImage}
-            renderResult={renderResult}
-            sectionFilter="all"
-            onUpdateSettings={handleUpdateSettings}
-            onChangePhosphorTheme={setPhosphorTheme}
-            onResetDefaults={handleResetDefaults}
-            onOpenPaletteEditor={() => setActiveSection('palettes')}
-            onOpenCharEditor={() => setActiveSection('characters')}
-            onAutoFitNow={handleAutoFitNow}
-          />
+          {modeSwitcher}
+          <div className="flex-1 overflow-y-auto pg-scroll">
+            {controlMode === 'simple' ? (
+              <SimpleControls
+                settings={settings}
+                phosphorTheme={phosphorTheme}
+                isAutoTuning={isAutoTuning}
+                tuneSummary={tuneSummary}
+                tuneSource={tuneSource}
+                tuneError={tuneError}
+                canUndoTune={!!undoSnapshot}
+                onUpdateSettings={handleUpdateSettings}
+                onChangePhosphorTheme={setPhosphorTheme}
+                onAutoTune={handleAutoTune}
+                onUndoTune={handleUndoTune}
+                onResetDefaults={handleResetDefaults}
+              />
+            ) : (
+              <InspectorControls
+                settings={settings}
+                phosphorTheme={phosphorTheme}
+                palettes={allPalettes}
+                charRamps={allRamps}
+                sourceImage={sourceImage}
+                renderResult={renderResult}
+                sectionFilter="all"
+                onUpdateSettings={handleUpdateSettings}
+                onChangePhosphorTheme={setPhosphorTheme}
+                onResetDefaults={handleResetDefaults}
+                onOpenPaletteEditor={() => setActiveSection('palettes')}
+                onOpenCharEditor={() => setActiveSection('characters')}
+                onAutoFitNow={handleAutoFitNow}
+              />
+            )}
+          </div>
         </aside>
       </main>
 
@@ -408,31 +585,54 @@ export default function App() {
         onOpenPalettes={() => setActiveSection('palettes')}
         onOpenCharacters={() => setActiveSection('characters')}
         onOpenPresets={() => setActiveSection('presets')}
+        onOpenBatch={() => setActiveSection('batch')}
       >
-        <InspectorControls
-          settings={settings}
-          phosphorTheme={phosphorTheme}
-          palettes={allPalettes}
-          charRamps={allRamps}
-          sourceImage={sourceImage}
-          renderResult={renderResult}
-          sectionFilter={mobileSheetToInspectorTab(mobileSheet)}
-          onUpdateSettings={handleUpdateSettings}
-          onChangePhosphorTheme={setPhosphorTheme}
-          onResetDefaults={handleResetDefaults}
-          onOpenPaletteEditor={() => {
-            setMobileSheet('none');
-            setActiveSection('palettes');
-          }}
-          onOpenCharEditor={() => {
-            setMobileSheet('none');
-            setActiveSection('characters');
-          }}
-          onAutoFitNow={handleAutoFitNow}
-        />
+        {mobileSheet === 'mode' && controlMode === 'simple' ? (
+          <>
+            {modeSwitcher}
+            <SimpleControls
+              settings={settings}
+              phosphorTheme={phosphorTheme}
+              isAutoTuning={isAutoTuning}
+              tuneSummary={tuneSummary}
+              tuneSource={tuneSource}
+              tuneError={tuneError}
+              canUndoTune={!!undoSnapshot}
+              onUpdateSettings={handleUpdateSettings}
+              onChangePhosphorTheme={setPhosphorTheme}
+              onAutoTune={handleAutoTune}
+              onUndoTune={handleUndoTune}
+              onResetDefaults={handleResetDefaults}
+            />
+          </>
+        ) : (
+          <>
+            {mobileSheet === 'mode' && modeSwitcher}
+            <InspectorControls
+              settings={settings}
+              phosphorTheme={phosphorTheme}
+              palettes={allPalettes}
+              charRamps={allRamps}
+              sourceImage={sourceImage}
+              renderResult={renderResult}
+              sectionFilter={mobileSheetToInspectorTab(mobileSheet)}
+              onUpdateSettings={handleUpdateSettings}
+              onChangePhosphorTheme={setPhosphorTheme}
+              onResetDefaults={handleResetDefaults}
+              onOpenPaletteEditor={() => {
+                setMobileSheet('none');
+                setActiveSection('palettes');
+              }}
+              onOpenCharEditor={() => {
+                setMobileSheet('none');
+                setActiveSection('characters');
+              }}
+              onAutoFitNow={handleAutoFitNow}
+            />
+          </>
+        )}
       </MobileBottomBar>
 
-      {/* Editors & Modals */}
       {activeSection === 'palettes' && (
         <PaletteEditorModal
           palettes={allPalettes}
@@ -465,6 +665,15 @@ export default function App() {
           onSavePreset={handleSavePreset}
           onDeletePreset={handleDeletePreset}
           onResetDefaults={handleResetDefaults}
+          onClose={() => setActiveSection('studio')}
+        />
+      )}
+
+      {activeSection === 'batch' && (
+        <BatchModal
+          settings={settings}
+          palette={activePalette}
+          charRamp={activeRamp}
           onClose={() => setActiveSection('studio')}
         />
       )}

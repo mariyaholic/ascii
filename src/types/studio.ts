@@ -15,7 +15,7 @@ export type ColorMode = 'mono' | 'grayscale' | 'palette' | 'truecolor';
 
 export type PhosphorTheme = 'p31' | 'p3' | 'p4';
 
-export type WorkspaceSection = 'studio' | 'palettes' | 'characters' | 'presets';
+export type WorkspaceSection = 'studio' | 'palettes' | 'characters' | 'presets' | 'batch';
 
 export interface PaletteDefinition {
   id: string;

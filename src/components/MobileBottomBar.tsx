@@ -10,6 +10,7 @@ interface MobileBottomBarProps {
   onOpenPalettes: () => void;
   onOpenCharacters: () => void;
   onOpenPresets: () => void;
+  onOpenBatch: () => void;
   children: React.ReactNode;
 }
 
@@ -19,6 +20,7 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
   onOpenPalettes,
   onOpenCharacters,
   onOpenPresets,
+  onOpenBatch,
   children,
 }) => {
   const toggleSheet = (id: MobileSheetId) => {
@@ -31,7 +33,7 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
     icon: React.ReactNode;
   }> = [
     { id: 'none', label: 'Canvas', icon: <Grid3x3 className="w-5 h-5" /> },
-    { id: 'mode', label: 'Grid & Tone', icon: <Sliders className="w-5 h-5" /> },
+    { id: 'mode', label: 'Style', icon: <Sliders className="w-5 h-5" /> },
     { id: 'dither', label: 'Dither', icon: <Sparkles className="w-5 h-5" /> },
     { id: 'color', label: 'Color', icon: <Palette className="w-5 h-5" /> },
     { id: 'more', label: 'Editors', icon: <Bookmark className="w-5 h-5" /> },
@@ -87,6 +89,17 @@ export const MobileBottomBar: React.FC<MobileBottomBarProps> = ({
                   className="flex min-h-[48px] items-center justify-between rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] px-4 text-sm font-medium text-[var(--pg-text)]"
                 >
                   <span>Saved Presets</span>
+                  <span className="text-xs text-[var(--pg-accent)]">Open</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSelectSheet('none');
+                    onOpenBatch();
+                  }}
+                  className="flex min-h-[48px] items-center justify-between rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] px-4 text-sm font-medium text-[var(--pg-text)]"
+                >
+                  <span>Batch ZIP Processing</span>
                   <span className="text-xs text-[var(--pg-accent)]">Open</span>
                 </button>
               </div>

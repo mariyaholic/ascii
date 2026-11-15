@@ -14,6 +14,7 @@ const NAV_ITEMS: ReadonlyArray<{ id: WorkspaceSection; label: string }> = [
   { id: 'palettes', label: 'Palettes' },
   { id: 'characters', label: 'Characters' },
   { id: 'presets', label: 'Presets' },
+  { id: 'batch', label: 'Batch' },
 ];
 
 export const StudioHeader: React.FC<StudioHeaderProps> = ({
