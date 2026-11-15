@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <rect width="512" height="512" rx="96" fill="#060907" />
+  <rect x="28" y="28" width="456" height="456" rx="76" stroke="#1D2D23" stroke-width="8" fill="#0C120E" />
+  <!-- 4x4 Pixel / Dither Grid Emblem -->
+  <rect x="112" y="112" width="64" height="64" rx="8" fill="#33FF66" />
+  <rect x="188" y="112" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.7" />
+  <rect x="264" y="112" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.35" />
+  <rect x="340" y="112" width="64" height="64" rx="8" fill="#1D2D23" />
+
+  <rect x="112" y="188" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.75" />
+  <rect x="188" y="188" width="64" height="64" rx="8" fill="#33FF66" />
+  <rect x="264" y="188" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.55" />
+  <rect x="340" y="188" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.2" />
+
+  <rect x="112" y="264" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.35" />
+  <rect x="188" y="264" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.6" />
+  <rect x="264" y="264" width="64" height="64" rx="8" fill="#33FF66" />
+  <rect x="340" y="264" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.7" />
+
+  <rect x="112" y="340" width="64" height="64" rx="8" fill="#1D2D23" />
+  <rect x="188" y="340" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.25" />
+  <rect x="264" y="340" width="64" height="64" rx="8" fill="#33FF66" fill-opacity="0.8" />
+  <rect x="340" y="340" width="64" height="64" rx="8" fill="#33FF66" />
+</svg>

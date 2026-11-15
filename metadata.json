@@ -1,0 +1,6 @@
+{
+  "name": "PhosphorGrid",
+  "description": "Multi-platform pixel and ASCII/Unicode art studio with resolution-aware rendering, Bayer and error-diffusion dithering, custom palette and glyph editors, and TXT/ANSI/PNG/SVG exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
