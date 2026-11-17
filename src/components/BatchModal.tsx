@@ -19,7 +19,6 @@ import {
 } from '../engine/batchProcessor';
 import type { AnsiColorDepth } from '../engine/exporters';
 import type { CharRampDefinition, PaletteDefinition, RenderSettings } from '../types/studio';
-import { Button, ModalShell } from './ui/Modal';
 
 interface BatchModalProps {
   settings: RenderSettings;
@@ -167,19 +166,31 @@ export const BatchModal: React.FC<BatchModalProps> = ({
   const progressPct = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
 
   return (
-    <ModalShell
-      title="Batch export"
-      subtitle={`Applying ${settings.mode} · ${settings.ditherAlgorithm} · ${settings.colorMode} · ${
-        settings.autoFit ? 'Auto-Fit Grid' : `${settings.columns} cols`
-      }`}
-      size="lg"
-      onClose={() => {
-        abortRef.current?.abort();
-        onClose();
-      }}
-      closeLabel="Close batch export"
-      bodyClassName="flex flex-col p-0"
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-surface)] shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[var(--pg-border)] px-5 py-3.5">
+          <div>
+            <h2 className="font-display text-base font-semibold text-[var(--pg-text)]">
+              Batch ZIP Processor
+            </h2>
+            <p className="mt-0.5 font-mono-grid text-xs text-[var(--pg-muted)]">
+              Applying {settings.mode} · {settings.ditherAlgorithm} · {settings.colorMode} ·{' '}
+              {settings.autoFit ? 'Auto-Fit Grid' : `${settings.columns} cols`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              abortRef.current?.abort();
+              onClose();
+            }}
+            className="flex h-9 w-9 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-elevated)] hover:text-[var(--pg-text)] cursor-pointer"
+            aria-label="Close batch processor"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
 
         {/* Upload Dropzone & Queue Toolbar */}
         <div className="border-b border-[var(--pg-border)] bg-[var(--pg-well)] p-4 space-y-3">
@@ -209,7 +220,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                   Drop multiple images here or browse files
                 </p>
                 <p className="text-[11px] text-[var(--pg-muted)]">
-                  Uses the current studio settings for every image.
+                  Current studio render settings will be applied to every image in the queue.
                 </p>
               </div>
             </div>
@@ -222,13 +233,13 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                 className="inline-flex items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3.5 py-2 text-xs font-semibold text-[var(--pg-accent-ink)] hover:opacity-90 disabled:opacity-40 cursor-pointer whitespace-nowrap"
               >
                 <ImagePlus className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Add images</span>
+                <span>Add Images</span>
               </button>
               {items.length > 0 && !isRunning && (
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="pg-tap inline-flex min-h-[40px] items-center gap-1 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] px-3 py-2 text-xs font-medium text-[var(--pg-muted)] transition-colors hover:text-[var(--pg-danger)]"
+                  className="inline-flex items-center gap-1 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] px-3 py-2 text-xs font-medium text-[var(--pg-muted)] hover:text-red-300 cursor-pointer whitespace-nowrap"
                 >
                   <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                   <span>Clear</span>
@@ -252,7 +263,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
           {/* Output Format Checkboxes inside ZIP */}
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="font-medium text-[var(--pg-muted)]">Include</span>
+              <span className="font-medium text-[var(--pg-muted)]">Include in ZIP:</span>
               {(
                 [
                   { key: 'includePng', label: 'Raster PNG' },
@@ -282,7 +293,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
 
             {formats.includePng && (
               <div className="flex items-center gap-2">
-                <span className="text-[var(--pg-muted)]">Scale</span>
+                <span className="text-[var(--pg-muted)]">PNG Scale:</span>
                 {[1, 2].map((s) => (
                   <button
                     key={s}
@@ -350,7 +361,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                 No images queued yet
               </p>
               <p className="mt-1 max-w-sm text-xs text-[var(--pg-muted)]">
-                Add images above to convert them in one pass, then download a ZIP.
+                Select multiple photos or artwork files above to convert them all in one pass and download a compressed ZIP archive.
               </p>
             </div>
           ) : (
@@ -397,7 +408,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                     )}
                     {item.status === 'error' && (
                       <span
-                        className="inline-flex items-center gap-1 text-xs text-[var(--pg-danger)]"
+                        className="inline-flex items-center gap-1 text-xs text-red-300"
                         title={item.error}
                       >
                         <AlertCircle className="w-3.5 h-3.5" aria-hidden="true" />
@@ -409,7 +420,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                       <button
                         type="button"
                         onClick={() => removeItem(item.id)}
-                        className="pg-tap flex h-9 w-9 items-center justify-center rounded text-[var(--pg-muted)] transition-colors hover:text-[var(--pg-danger)]"
+                        className="p-1.5 rounded text-[var(--pg-muted)] hover:text-red-300 cursor-pointer"
                         aria-label={`Remove ${item.name}`}
                       >
                         <X className="w-3.5 h-3.5" />
@@ -423,7 +434,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
         </div>
 
         {/* Footer Progress & Action */}
-        <div className="pg-safe-bottom sticky bottom-0 z-10 space-y-2.5 border-t border-[var(--pg-border)] bg-[var(--pg-surface)] px-4 py-3 sm:px-5 sm:py-3.5">
+        <div className="border-t border-[var(--pg-border)] bg-[var(--pg-surface)] px-5 py-3.5 space-y-2.5">
           {isRunning && (
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs font-mono-grid">
@@ -441,7 +452,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
             </div>
           )}
 
-          {batchError && <p className="text-xs text-[var(--pg-warn)]">{batchError}</p>}
+          {batchError && <p className="text-xs text-amber-300">{batchError}</p>}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
             <span className="font-mono-grid text-xs text-[var(--pg-muted)]">
@@ -454,7 +465,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                 <button
                   type="button"
                   onClick={() => abortRef.current?.abort()}
-                  className="rounded-md border border-[var(--pg-danger)]/45 bg-[var(--pg-danger-soft)] px-4 py-2 text-xs font-medium text-[var(--pg-danger)] hover:border-[var(--pg-danger)] cursor-pointer"
+                  className="rounded-md border border-red-500/40 bg-[var(--pg-well)] px-4 py-2 text-xs font-medium text-red-300 hover:bg-red-950/40 cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -470,7 +481,7 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                       className="inline-flex items-center gap-1.5 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-elevated)] px-3.5 py-2 text-xs font-medium text-[var(--pg-text)] hover:border-[var(--pg-accent)] cursor-pointer"
                     >
                       <Download className="w-3.5 h-3.5" aria-hidden="true" />
-                      <span>Download ZIP again</span>
+                      <span>Download ZIP Again</span>
                     </button>
                   )}
 
@@ -481,13 +492,14 @@ export const BatchModal: React.FC<BatchModalProps> = ({
                     className="inline-flex items-center gap-2 rounded-md bg-[var(--pg-accent)] px-4 py-2 text-xs font-semibold text-[var(--pg-accent-ink)] hover:opacity-90 disabled:opacity-40 cursor-pointer whitespace-nowrap"
                   >
                     <FolderArchive className="w-3.5 h-3.5" aria-hidden="true" />
-                    <span>Process and export ZIP</span>
+                    <span>Process &amp; Export ZIP</span>
                   </button>
                 </>
               )}
             </div>
           </div>
         </div>
-    </ModalShell>
+      </div>
+    </div>
   );
 };

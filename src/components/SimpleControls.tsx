@@ -209,8 +209,8 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
       {/* Section 1: Smart Auto-Tune & Plain-English Helper */}
       <div className="p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
-            Auto-tune
+          <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
+            Smart Style Assistant
           </h2>
           {canUndoTune && (
             <button
@@ -233,12 +233,12 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
           {isAutoTuning ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-              <span>Analyzing tone and detail…</span>
+              <span>Analyzing image tone &amp; detail…</span>
             </>
           ) : (
             <>
               <Wand2 className="w-4 h-4" aria-hidden="true" />
-              <span>Auto-tune this image</span>
+              <span>Auto-Tune Dither, Tone &amp; Color</span>
             </>
           )}
         </button>
@@ -248,7 +248,7 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
             type="text"
             value={goalInput}
             onChange={(e) => setGoalInput(e.target.value)}
-            placeholder="Describe a look, e.g. crisp ink sketch"
+            placeholder="Describe a look (e.g. crisp sketch)..."
             className="min-w-0 flex-1 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] px-2.5 py-2 text-xs text-[var(--pg-text)] placeholder:text-[var(--pg-muted)]/70 focus:border-[var(--pg-accent)] focus:outline-none"
           />
           <button
@@ -282,20 +282,20 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
           <div className="rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] p-2.5 text-xs leading-relaxed text-[var(--pg-text)]">
             <p>{tuneSummary}</p>
             <span className="mt-1 block text-[11px] text-[var(--pg-muted)]">
-              {tuneSource === 'api' ? 'Tuned by the style model' : 'Tuned on this device'}
+              {tuneSource === 'api' ? 'Decision model tuning' : 'Local histogram tuning'}
             </span>
           </div>
         )}
 
         {tuneError && (
-          <p className="text-xs text-[var(--pg-warn)]">{tuneError}</p>
+          <p className="text-xs text-amber-300">{tuneError}</p>
         )}
       </div>
 
       {/* Section 2: One-Tap Visual Styles */}
       <div className="p-4 space-y-3">
-        <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
-          Quick looks
+        <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
+          Pick a Style
         </h2>
         <div className="grid grid-cols-2 gap-2">
           {QUICK_LOOKS.map((look) => {
@@ -327,14 +327,14 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
 
       {/* Section 3: 3 Simple Everyday Sliders + Color Mood */}
       <div className="p-4 space-y-4">
-        <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
-          Adjust
+        <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
+          Fine-Tune Simply
         </h2>
 
         {/* Detail Size */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <label className="text-[var(--pg-muted)] font-medium">Detail</label>
+            <label className="text-[var(--pg-muted)] font-medium">Detail Level</label>
             <span className="font-mono-grid text-[var(--pg-text)]">
               {settings.columns < 68 ? 'Chunky' : settings.columns > 130 ? 'Fine' : 'Balanced'} ({settings.columns})
             </span>
@@ -359,7 +359,7 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
         {/* Simplification */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <label className="text-[var(--pg-muted)] font-medium">Simplify</label>
+            <label className="text-[var(--pg-muted)] font-medium">Simplification</label>
             <span className="font-mono-grid text-[var(--pg-text)]">
               {['Detailed', 'Slightly Clean', 'Simplified', 'Smooth', 'Bold Flat'][simplicityLevel]}
             </span>
@@ -378,7 +378,7 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
         {/* Tone Punch */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
-            <label className="text-[var(--pg-muted)] font-medium">Contrast</label>
+            <label className="text-[var(--pg-muted)] font-medium">Contrast &amp; Clarity</label>
             <span className="font-mono-grid text-[var(--pg-text)]">
               {settings.contrast <= 0 ? 'Soft' : settings.contrast >= 30 ? 'Dramatic' : 'Crisp'}
             </span>
@@ -396,7 +396,7 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
 
         {/* Color Mood */}
         <div className="space-y-1.5">
-          <span className="block text-xs font-medium text-[var(--pg-muted)]">Color</span>
+          <span className="block text-xs font-medium text-[var(--pg-muted)]">Color Vibe</span>
           <div className="grid grid-cols-3 gap-1.5">
             <button
               type="button"
@@ -493,7 +493,7 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
         </div>
 
         <label className="flex items-center justify-between rounded-md border border-[var(--pg-border)] bg-[var(--pg-well)] px-3 py-2 text-xs text-[var(--pg-text)] cursor-pointer select-none">
-          <span>Invert light and dark</span>
+          <span>Flip Light &amp; Dark (Inverse)</span>
           <input
             type="checkbox"
             checked={settings.inverse}
@@ -508,7 +508,7 @@ export const SimpleControls: React.FC<SimpleControlsProps> = ({
           className="flex w-full items-center justify-center gap-2 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] py-2 text-xs font-medium text-[var(--pg-muted)] hover:border-[var(--pg-accent)] hover:text-[var(--pg-text)] transition-colors cursor-pointer"
         >
           <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-          <span>Reset style</span>
+          <span>Reset Look</span>
         </button>
       </div>
     </div>

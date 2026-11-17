@@ -1,81 +1,60 @@
-import { useCallback, useEffect, useState } from 'react';
-import {
-  clearDeferredInstallPrompt,
-  getDeferredInstallPrompt,
-  isIosDevice,
-  isStandaloneDisplay,
-  subscribeInstallPrompt,
-} from '../lib/installPrompt';
+import { useEffect, useState } from 'react';
 
-const DISMISS_KEY = 'pg.installDismissedAt.v1';
-const SNOOZE_MS = 1000 * 60 * 60 * 24 * 14;
-
-function readDismissedAt(): number | null {
-  try {
-    const raw = window.localStorage.getItem(DISMISS_KEY);
-    const parsed = raw ? Number.parseInt(raw, 10) : NaN;
-    return Number.isFinite(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>;
 }
 
 export function usePWAInstall() {
-  const [hasPrompt, setHasPrompt] = useState<boolean>(() => getDeferredInstallPrompt() !== null);
-  const [isInstalled, setIsInstalled] = useState<boolean>(() => isStandaloneDisplay());
-  const [isIOS] = useState<boolean>(() => isIosDevice());
-  const [isSnoozed, setIsSnoozed] = useState<boolean>(() => {
-    const dismissedAt = readDismissedAt();
-    return dismissedAt !== null && Date.now() - dismissedAt < SNOOZE_MS;
-  });
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = subscribeInstallPrompt((event) => setHasPrompt(event !== null));
-    const standaloneQuery = window.matchMedia('(display-mode: standalone)');
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as unknown as { standalone?: boolean }).standalone === true;
+    setIsInstalled(isStandalone);
 
-    const syncInstalled = () => setIsInstalled(isStandaloneDisplay());
-    standaloneQuery.addEventListener?.('change', syncInstalled);
-    window.addEventListener('appinstalled', syncInstalled);
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIOSDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(isIOSDevice);
+
+    const handleBeforeInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+
+    const handleAppInstalled = () => {
+      setIsInstalled(true);
+      setDeferredPrompt(null);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
 
     return () => {
-      unsubscribe();
-      standaloneQuery.removeEventListener?.('change', syncInstalled);
-      window.removeEventListener('appinstalled', syncInstalled);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
     };
   }, []);
 
-  const dismiss = useCallback(() => {
-    try {
-      window.localStorage.setItem(DISMISS_KEY, String(Date.now()));
-    } catch {
-      // Private mode: keep the in-memory dismissal for this session only.
-    }
-    setIsSnoozed(true);
-  }, []);
-
-  const install = useCallback(async (): Promise<boolean> => {
-    const prompt = getDeferredInstallPrompt();
-    if (!prompt) return false;
-
-    await prompt.prompt();
-    const { outcome } = await prompt.userChoice;
-
+  const install = async () => {
+    if (!deferredPrompt) return false;
+    await deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
-      clearDeferredInstallPrompt();
       setIsInstalled(true);
+      setDeferredPrompt(null);
       return true;
     }
-
-    dismiss();
     return false;
-  }, [dismiss]);
+  };
 
   return {
-    /** Chrome/Edge/Android: a real install prompt is queued and can be shown. */
-    isInstallable: hasPrompt && !isInstalled && !isSnoozed,
+    isInstallable: !!deferredPrompt,
     isInstalled,
-    isIOS: isIOS && !isInstalled && !isSnoozed,
+    isIOS,
     install,
-    dismiss,
   };
 }

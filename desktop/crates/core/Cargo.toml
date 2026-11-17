@@ -1,9 +1,0 @@
-[package]
-name = "phosphorgrid-core"
-description = "Render engine shared by the PhosphorGrid desktop and command-line ports"
-version.workspace = true
-edition.workspace = true
-rust-version.workspace = true
-license.workspace = true
-
-[dependencies]

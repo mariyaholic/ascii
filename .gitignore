@@ -2,8 +2,6 @@ node_modules/
 build/
 dist/
 coverage/
-target/
-phosphorgrid-out/
 .DS_Store
 *.log
 .env*

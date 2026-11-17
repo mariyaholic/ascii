@@ -30,16 +30,16 @@ export const ContrastDiagnosticsPanel: React.FC<ContrastDiagnosticsPanelProps> =
       {/* Header */}
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
+          <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
             Contrast Overlay
           </h3>
           <p className="mt-0.5 font-mono-grid text-xs text-[var(--pg-muted)]">
             <span
               className={
                 analysis.affectedPercent >= 45
-                  ? 'text-[var(--pg-danger)]'
+                  ? 'text-red-300'
                   : analysis.affectedPercent >= 22
-                  ? 'text-[var(--pg-warn)]'
+                  ? 'text-amber-300'
                   : 'text-[var(--pg-accent)]'
               }
             >
@@ -52,7 +52,7 @@ export const ContrastDiagnosticsPanel: React.FC<ContrastDiagnosticsPanelProps> =
         <button
           type="button"
           onClick={onClose}
-          className="pg-tap flex h-9 w-9 items-center justify-center rounded text-[var(--pg-muted)] transition-colors hover:bg-[var(--pg-elevated)] hover:text-[var(--pg-text)]"
+          className="flex h-7 w-7 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-elevated)] hover:text-[var(--pg-text)] cursor-pointer"
           aria-label="Close contrast overlay"
         >
           <X className="w-3.5 h-3.5" />
@@ -65,7 +65,7 @@ export const ContrastDiagnosticsPanel: React.FC<ContrastDiagnosticsPanelProps> =
           <span className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="inline-block h-3 w-3 rounded-xs border border-[var(--pg-danger)] bg-[var(--pg-danger-soft)]"
+              className="inline-block h-3 w-3 rounded-xs border border-red-300 bg-red-500/45"
             />
             <span>Low Glyph Visibility (&lt;3:1)</span>
           </span>
@@ -78,11 +78,10 @@ export const ContrastDiagnosticsPanel: React.FC<ContrastDiagnosticsPanelProps> =
           <span className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="inline-block h-3 w-3 rounded-xs border border-[var(--pg-warn)] bg-[var(--pg-warn-soft)]"
+              className="inline-block h-3 w-3 rounded-xs border border-amber-300 bg-amber-500/40"
               style={{
                 backgroundImage:
-                  'repeating-linear-gradient(135deg, transparent 0 2px, currentColor 2px 3px)',
-                color: 'var(--pg-warn)',
+                  'linear-gradient(135deg, transparent 42%, rgba(252,211,77,0.85) 48%, rgba(252,211,77,0.85) 52%, transparent 58%)',
               }}
             />
             <span>Crushed Shadows / Highlights</span>
@@ -96,7 +95,7 @@ export const ContrastDiagnosticsPanel: React.FC<ContrastDiagnosticsPanelProps> =
           <span className="flex items-center gap-2">
             <span
               aria-hidden="true"
-              className="inline-block h-3 w-3 rounded-xs border border-[var(--pg-info)] bg-[var(--pg-info-soft)]"
+              className="inline-block h-3 w-3 rounded-xs bg-sky-400/35 border border-sky-400/50"
             />
             <span>Compressed Flat Regions</span>
           </span>
