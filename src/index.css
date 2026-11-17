@@ -134,14 +134,12 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Unlayered rules beat Tailwind's layered utilities, so a plain `px-4` next to
+   this class would be silently zeroed. Set the gutter through --pg-gutter-x
+   and the inset is added on top of it. */
 .pg-safe-x {
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
-}
-
-.pg-safe-both-x {
-  padding-left: max(env(safe-area-inset-left, 0px), 0px);
-  padding-right: max(env(safe-area-inset-right, 0px), 0px);
+  padding-left: calc(var(--pg-gutter-x, 0px) + env(safe-area-inset-left, 0px));
+  padding-right: calc(var(--pg-gutter-x, 0px) + env(safe-area-inset-right, 0px));
 }
 
 /* Touch affordances: no 300ms delay, no grey flash, no text selection. */

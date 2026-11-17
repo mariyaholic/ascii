@@ -27,7 +27,7 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
   onOpenExport,
 }) => {
   return (
-    <header className="pg-safe-top pg-safe-x sticky top-0 z-30 flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--pg-border)] bg-[var(--pg-surface)] px-4 lg:gap-8 lg:px-6">
+    <header className="pg-safe-top pg-safe-x sticky top-0 z-30 flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--pg-border)] bg-[var(--pg-surface)] [--pg-gutter-x:1rem] lg:gap-8 lg:[--pg-gutter-x:1.5rem]">
       {/* Zone 1: single-element brand wordmark */}
       <a
         href="#studio"

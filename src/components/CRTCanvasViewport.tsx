@@ -466,7 +466,7 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
         )}
 
         {/* Bottom Floating Viewport Controls */}
-        <div className="pg-safe-x absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto pg-scroll rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-surface)]/95 p-1 shadow-xl backdrop-blur-md">
+        <div className="pg-safe-x absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto pg-scroll rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-surface)]/95 py-1 [--pg-gutter-x:0.25rem] shadow-xl backdrop-blur-md">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.15, Math.round((z - 0.2) * 100) / 100))}
