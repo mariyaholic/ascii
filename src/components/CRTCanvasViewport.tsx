@@ -135,11 +135,20 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
     };
   }, [peekingOriginal]);
 
-  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    setZoom((z) => Math.max(0.15, Math.min(8, Math.round(z * factor * 100) / 100)));
-  };
+  // Wheel zoom needs a native non-passive listener: React's synthetic wheel
+  // handler is passive, so preventDefault() there does nothing on mobile Chrome.
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) return; // let browser pinch-zoom through
+      event.preventDefault();
+      const factor = event.deltaY < 0 ? 1.12 : 0.89;
+      setZoom((z) => Math.max(0.15, Math.min(8, Math.round(z * factor * 100) / 100)));
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, []);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isDraggingSplit) return;
@@ -201,14 +210,14 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
     <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[var(--pg-well)]">
       {/* Top Source & Sample Strip */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--pg-border)] bg-[var(--pg-surface)]/80 px-4 py-2.5">
-        <div className="flex items-center gap-2 overflow-x-auto">
+        <div className="flex items-center gap-2 overflow-x-auto pg-scroll">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
             className="inline-flex min-h-[36px] items-center gap-2 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-elevated)] px-3 py-1.5 text-xs font-medium text-[var(--pg-text)] hover:border-[var(--pg-accent)] hover:text-[var(--pg-accent)] transition-colors whitespace-nowrap shrink-0 cursor-pointer"
           >
             <ImagePlus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Load Image</span>
+            <span>Load image</span>
           </button>
 
           <button
@@ -296,7 +305,6 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
       {/* Interactive CRT Viewport Well */}
       <div
         ref={containerRef}
-        onWheel={handleWheel}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -315,22 +323,21 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 opacity-20"
           style={{
-            backgroundImage:
-              'radial-gradient(var(--pg-border-strong) 1px, transparent 1px)',
+            backgroundImage: 'radial-gradient(var(--pg-grid-dot) 1px, transparent 1px)',
             backgroundSize: '20px 20px',
           }}
         />
 
         {errorMessage && (
-          <div className="z-20 max-w-md rounded-lg border border-red-500/40 bg-[var(--pg-surface)] p-5 text-center shadow-xl">
-            <p className="text-sm font-medium text-red-300">Unable to load image</p>
+          <div className="z-20 max-w-md rounded-lg border border-[var(--pg-danger)]/45 bg-[var(--pg-surface)] p-5 text-center shadow-xl">
+            <p className="text-sm font-medium text-[var(--pg-danger)]">Unable to load image</p>
             <p className="mt-1 text-xs text-[var(--pg-muted)]">{errorMessage}</p>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="mt-4 rounded-md bg-[var(--pg-accent)] px-4 py-2 text-xs font-semibold text-[var(--pg-accent-ink)] cursor-pointer"
             >
-              Choose Another Image
+              Choose another image
             </button>
           </div>
         )}
@@ -450,7 +457,7 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
           <div className="absolute inset-4 z-30 flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-[var(--pg-accent)] bg-[var(--pg-bg)]/90 backdrop-blur-sm">
             <ImagePlus className="w-8 h-8 text-[var(--pg-accent)]" />
             <p className="mt-2 text-sm font-medium text-[var(--pg-text)]">
-              Drop image to render into pixels &amp; ASCII
+              Drop an image to render it
             </p>
             <p className="mt-1 text-xs text-[var(--pg-muted)]">
               PNG, JPG, WebP, GIF, or paste with Ctrl/Cmd+V
@@ -459,7 +466,7 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
         )}
 
         {/* Bottom Floating Viewport Controls */}
-        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex max-w-[calc(100%-1.5rem)] items-center gap-1 overflow-x-auto rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-surface)]/95 p-1 shadow-xl backdrop-blur-md">
+        <div className="pg-safe-x absolute bottom-3 left-1/2 z-20 flex max-w-[calc(100%-1.5rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto pg-scroll rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-surface)]/95 py-1 [--pg-gutter-x:0.25rem] shadow-xl backdrop-blur-md">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.15, Math.round((z - 0.2) * 100) / 100))}
@@ -537,7 +544,7 @@ export const CRTCanvasViewport: React.FC<CRTCanvasViewportProps> = ({
             aria-pressed={peekingOriginal}
           >
             <Eye className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Compare Original</span>
+            <span>Hold to compare</span>
           </button>
 
           <button

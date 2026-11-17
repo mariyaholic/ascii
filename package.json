@@ -9,7 +9,10 @@
     "start": "node server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "parity": "tsx scripts/parity-golden.ts --check",
+    "parity:update": "tsx scripts/parity-golden.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

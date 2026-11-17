@@ -6,21 +6,23 @@ import type {
   StudioPreset,
 } from '../types/studio';
 
+// Resolved through the bundler so production builds (and the offline precache)
+// ship hashed copies; a raw `/src/...` path only exists under the dev server.
 export const SAMPLE_IMAGES: SampleImageItem[] = [
   {
     id: 'crt-workstation',
     name: '1983 CRT Workstation',
-    src: '/src/assets/images/sample_retro_computer_1794718608855.jpg',
+    src: new URL('../assets/images/sample_retro_computer_1794718608855.jpg', import.meta.url).href,
   },
   {
     id: 'classical-bust',
     name: 'Marble Bust',
-    src: '/src/assets/images/sample_classical_bust_1794718608134.jpg',
+    src: new URL('../assets/images/sample_classical_bust_1794718608134.jpg', import.meta.url).href,
   },
   {
     id: 'alpine-peak',
     name: 'Alpine Dawn Ridge',
-    src: '/src/assets/images/sample_alpine_peak_1794718608675.jpg',
+    src: new URL('../assets/images/sample_alpine_peak_1794718608675.jpg', import.meta.url).href,
   },
 ];
 

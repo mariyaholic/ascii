@@ -131,8 +131,8 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
       {showMode && (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
-              Render Mode &amp; Grid
+            <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
+              Mode &amp; grid
             </h2>
             {renderResult && (
               <span className="font-mono-grid text-xs text-[var(--pg-muted)]">
@@ -157,7 +157,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                         : 0.52;
                     onUpdateSettings({ mode: m.id, cellAspectRatio: aspect });
                   }}
-                  className={`min-h-[34px] rounded px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`pg-tap min-h-[34px] rounded px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
                     active
                       ? 'bg-[var(--pg-accent)] text-[var(--pg-accent-ink)] font-semibold'
                       : 'text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
@@ -183,7 +183,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                 }}
                 className="accent-[var(--pg-accent)] h-4 w-4 rounded"
               />
-              <span>Auto-Fit Resolution</span>
+              <span>Auto-fit</span>
             </label>
 
             <label className="flex items-center gap-2 text-xs text-[var(--pg-text)] cursor-pointer select-none">
@@ -198,12 +198,12 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                 }
                 className="accent-[var(--pg-accent)] h-4 w-4 rounded"
               />
-              <span>1:1 Native</span>
+              <span>1:1 native</span>
             </label>
           </div>
 
           <SliderRow
-            label="Grid Columns"
+            label="Columns"
             valueDisplay={`${settings.nativeOneToOne && sourceImage ? Math.min(sourceImage.width, 320) : settings.columns} cols`}
             value={settings.columns}
             min={16}
@@ -215,7 +215,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
 
           {settings.mode !== 'pixel' && (
             <SliderRow
-              label="Cell Aspect Compensation"
+              label="Cell aspect"
               valueDisplay={settings.cellAspectRatio.toFixed(2)}
               value={settings.cellAspectRatio}
               min={0.35}
@@ -230,12 +230,12 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
       {/* Group 2: Simplification & Tone */}
       {showMode && (
         <div className="p-4 space-y-4">
-          <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
-            Simplification &amp; Tone
+          <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
+            Tone
           </h2>
 
           <SliderRow
-            label="Spatial Smoothing"
+            label="Smoothing"
             valueDisplay={settings.blurRadius === 0 ? 'Off' : `${settings.blurRadius} px`}
             value={settings.blurRadius}
             min={0}
@@ -245,7 +245,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
           />
 
           <SliderRow
-            label="Posterize Levels"
+            label="Posterize"
             valueDisplay={settings.posterizeLevels < 2 ? 'Off' : `${settings.posterizeLevels} levels`}
             value={settings.posterizeLevels}
             min={0}
@@ -301,8 +301,8 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
       {/* Group 3: Dithering (Bayer & Error Diffusion) */}
       {showDither && (
         <div className="p-4 space-y-4">
-          <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
-            Dithering Engine
+          <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
+            Dithering
           </h2>
 
           <div className="space-y-1.5">
@@ -329,7 +329,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
           </div>
 
           <SliderRow
-            label="Dither Strength"
+            label="Strength"
             valueDisplay={`${settings.ditherStrength}%`}
             value={settings.ditherStrength}
             min={0}
@@ -357,8 +357,8 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
       {showColor && (
         <div className="p-4 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-display text-xs font-semibold uppercase tracking-wider text-[var(--pg-text)]">
-              Color, Polarity &amp; Glyphs
+            <h2 className="font-display text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--pg-text)]">
+              Color &amp; glyphs
             </h2>
             <label className="flex items-center gap-2 text-xs font-medium text-[var(--pg-text)] cursor-pointer select-none">
               <input
@@ -367,7 +367,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                 onChange={(e) => onUpdateSettings({ inverse: e.target.checked })}
                 className="accent-[var(--pg-accent)] h-4 w-4 rounded"
               />
-              <span>Inverse</span>
+              <span>Invert</span>
             </label>
           </div>
 
@@ -379,7 +379,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                   key={cm.id}
                   type="button"
                   onClick={() => onUpdateSettings({ colorMode: cm.id })}
-                  className={`min-h-[34px] rounded px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`pg-tap min-h-[34px] rounded px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
                     active
                       ? 'bg-[var(--pg-accent)] text-[var(--pg-accent-ink)] font-semibold'
                       : 'text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
@@ -421,7 +421,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                   htmlFor="palette-select"
                   className="text-xs font-medium text-[var(--pg-muted)]"
                 >
-                  Active Palette
+                  Palette
                 </label>
                 <button
                   type="button"
@@ -460,7 +460,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                   htmlFor="ramp-select"
                   className="text-xs font-medium text-[var(--pg-muted)]"
                 >
-                  Unicode Character Ramp
+                  Character ramp
                 </label>
                 <button
                   type="button"
@@ -492,7 +492,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
           {/* Phosphor CRT UI Accent Switcher */}
           <div className="space-y-1.5 pt-1">
             <span className="block text-xs font-medium text-[var(--pg-muted)]">
-              Studio Phosphor Tube
+              Phosphor tube
             </span>
             <div className="grid grid-cols-3 gap-1.5">
               {PHOSPHOR_THEMES.map((pt) => {
@@ -507,7 +507,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
                         onUpdateSettings({ monoForeground: pt.fg, backgroundColor: pt.bg });
                       }
                     }}
-                    className={`min-h-[34px] rounded border px-2 py-1 text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
+                    className={`pg-tap min-h-[34px] rounded border px-2 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
                       active
                         ? 'border-[var(--pg-accent)] bg-[var(--pg-accent-soft)] text-[var(--pg-accent)]'
                         : 'border-[var(--pg-border)] bg-[var(--pg-well)] text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
@@ -526,7 +526,7 @@ export const InspectorControls: React.FC<InspectorControlsProps> = ({
             className="flex w-full items-center justify-center gap-2 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] py-2 text-xs font-medium text-[var(--pg-muted)] hover:border-[var(--pg-accent)] hover:text-[var(--pg-text)] transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Reset Parameters</span>
+            <span>Reset parameters</span>
           </button>
         </div>
       )}
