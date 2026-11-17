@@ -20,6 +20,7 @@ export default defineConfig(() => {
           'pwa-192x192.png',
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
+          'screenshots/*.jpg',
         ],
         manifest: {
           id: '/',
@@ -33,11 +34,44 @@ export default defineConfig(() => {
           theme_color: '#060907',
           background_color: '#060907',
           display: 'standalone',
+          // Installed desktop windows fall back to a minimal browser frame
+          // where standalone is unsupported, instead of a full tab.
+          display_override: ['standalone', 'minimal-ui'],
           orientation: 'any',
           launch_handler: { client_mode: 'navigate-existing' },
           prefer_related_applications: false,
           start_url: '/',
           scope: '/',
+          // Desktop installs register as an "Open with" target for images;
+          // the files arrive through window.launchQueue (see App.tsx).
+          file_handlers: [
+            {
+              action: '/',
+              accept: {
+                'image/png': ['.png'],
+                'image/jpeg': ['.jpg', '.jpeg'],
+                'image/webp': ['.webp'],
+                'image/gif': ['.gif'],
+              },
+            },
+          ],
+          // Richer install sheets on Android and desktop Chromium.
+          screenshots: [
+            {
+              src: '/screenshots/wide-studio.jpg',
+              sizes: '1440x900',
+              type: 'image/jpeg',
+              form_factor: 'wide',
+              label: 'Studio rendering a photo as phosphor ASCII art',
+            },
+            {
+              src: '/screenshots/narrow-studio.jpg',
+              sizes: '390x844',
+              type: 'image/jpeg',
+              form_factor: 'narrow',
+              label: 'Guided controls on a phone',
+            },
+          ],
           icons: [
             {
               src: '/pwa-192x192.png',
@@ -162,7 +196,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve(import.meta.dirname, '.'),
       },
     },
     server: {
