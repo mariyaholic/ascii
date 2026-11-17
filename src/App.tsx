@@ -11,9 +11,11 @@ import {
 } from './components/MobileBottomBar';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PaletteEditorModal } from './components/PaletteEditorModal';
+import { PWAUpdateToast } from './components/PWAUpdateToast';
 import { PresetsModal } from './components/PresetsModal';
 import { SimpleControls } from './components/SimpleControls';
 import { StudioHeader } from './components/StudioHeader';
+import { Segmented } from './components/ui/Modal';
 import {
   BUILT_IN_CHAR_RAMPS,
   BUILT_IN_PALETTES,
@@ -44,6 +46,33 @@ interface CachedSourcePixels {
 }
 
 type ControlComplexity = 'simple' | 'pro';
+
+type StudioPanel = 'palettes' | 'characters' | 'presets' | 'batch';
+
+/**
+ * Exactly one overlay may be open at a time. Keeping this a union (instead of a
+ * boolean per dialog) makes "two dialogs open" and "export with nothing to
+ * export" unrepresentable states.
+ */
+type StudioOverlay = StudioPanel | 'export' | null;
+
+const STUDIO_PANELS: readonly StudioPanel[] = ['palettes', 'characters', 'presets', 'batch'];
+
+function readOverlayFromLocation(): StudioOverlay {
+  if (typeof window === 'undefined') return null;
+  const panel = new URLSearchParams(window.location.search).get('panel');
+  return STUDIO_PANELS.includes(panel as StudioPanel) ? (panel as StudioPanel) : null;
+}
+
+function writeOverlayToLocation(overlay: StudioOverlay) {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (overlay && overlay !== 'export') url.searchParams.set('panel', overlay);
+  else url.searchParams.delete('panel');
+  if (url.href !== window.location.href) {
+    window.history.replaceState(window.history.state, '', url);
+  }
+}
 
 function computeAutoFitColumns(imgWidth: number, imgHeight: number): number {
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -101,11 +130,18 @@ export default function App() {
     []
   );
 
-  const [activeSection, setActiveSection] = useState<WorkspaceSection>('studio');
-  const [exportOpen, setExportOpen] = useState(false);
+  // A single overlay owns every dialog. `activeSection` is derived from it, so
+  // the header cannot claim a panel is open while a different dialog is shown.
+  const [overlay, setOverlay] = useState<StudioOverlay>(() => readOverlayFromLocation());
   const [mobileSheet, setMobileSheet] = useState<MobileSheetId>('none');
+  const activeSection: WorkspaceSection = overlay && overlay !== 'export' ? overlay : 'studio';
 
   const [sourceImage, setSourceImage] = useState<SourceImageInfo | null>(null);
+  // Bumped whenever new pixels arrive, so a render is triggered even when the
+  // new image happens to need identical settings (the old code keyed the render
+  // effect off the settings object alone and could leave the previous image on
+  // screen).
+  const [sourceRevision, setSourceRevision] = useState(0);
   const [renderResult, setRenderResult] = useState<RenderResult | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -116,6 +152,7 @@ export default function App() {
   const [tuneSource, setTuneSource] = useState<'api' | 'local' | null>(null);
   const [tuneError, setTuneError] = useState<string | null>(null);
   const [undoSnapshot, setUndoSnapshot] = useState<RenderSettings | null>(null);
+  const tuneRequestRef = useRef(0);
 
   const cachedPixelsRef = useRef<CachedSourcePixels | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -148,6 +185,12 @@ export default function App() {
   useEffect(() => {
     document.documentElement.setAttribute('data-phosphor', phosphorTheme);
   }, [phosphorTheme]);
+
+  // Manifest shortcuts and shared links open a panel; closing one clears the
+  // query string so a reload does not resurrect a dismissed dialog.
+  useEffect(() => {
+    writeOverlayToLocation(overlay);
+  }, [overlay]);
 
   useEffect(() => {
     try {
@@ -214,18 +257,37 @@ export default function App() {
         setIsProcessing(false);
       }
     }
-  }, [settings, activePalette, activeRamp]);
+  }, [settings, activePalette, activeRamp, sourceRevision]);
+  // sourceRevision is intentionally a dependency: new pixels must re-run the
+  // render even when the settings object is unchanged.
 
   useEffect(() => {
     triggerRender();
   }, [triggerRender]);
 
+  const clearTuneSession = useCallback(() => {
+    setUndoSnapshot(null);
+    setTuneSummary(null);
+    setTuneSource(null);
+    setTuneError(null);
+  }, []);
+
+  const openOverlay = useCallback(
+    (next: StudioOverlay) => {
+      // Export has no empty state; refuse to open it without a render.
+      if (next === 'export' && !renderResult) return;
+      setMobileSheet('none');
+      setOverlay(next);
+    },
+    [renderResult]
+  );
+
+  const closeOverlay = useCallback(() => setOverlay(null), []);
+
   const loadImageSource = useCallback(
     (id: string, name: string, src: string, isObjectUrl = false) => {
       setErrorMessage(null);
-      setTuneSummary(null);
-      setTuneSource(null);
-      setTuneError(null);
+      clearTuneSession();
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
@@ -267,6 +329,7 @@ export default function App() {
           height: img.naturalHeight,
           src,
         });
+        setSourceRevision((revision) => revision + 1);
 
         setSettings((prev) =>
           prev.autoFit
@@ -279,7 +342,7 @@ export default function App() {
       };
       img.src = src;
     },
-    [setSettings]
+    [setSettings, clearTuneSession]
   );
 
   useEffect(() => {
@@ -342,11 +405,15 @@ export default function App() {
       const cached = cachedPixelsRef.current;
       if (!cached) return;
 
+      const requestId = ++tuneRequestRef.current;
+      const isCurrent = () => requestId === tuneRequestRef.current;
+
       setUndoSnapshot({ ...settings });
       setIsAutoTuning(true);
       setTuneError(null);
 
       const applyLocalFallback = (notice?: string) => {
+        if (!isCurrent()) return;
         const localRec = computeLocalAutoTune(
           cached.rgba,
           cached.width,
@@ -361,7 +428,7 @@ export default function App() {
 
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         applyLocalFallback();
-        setIsAutoTuning(false);
+        if (isCurrent()) setIsAutoTuning(false);
         return;
       }
 
@@ -381,12 +448,14 @@ export default function App() {
           }),
         });
 
+        if (!isCurrent()) return;
+
         if (!response.ok) {
           const errPayload = await response.json().catch(() => ({}));
           const notice =
             errPayload?.code === 'API_KEY_MISSING'
               ? undefined
-              : 'Model service busy — applied instant local image analysis instead.';
+              : 'Style model unavailable — applied a local analysis instead.';
           applyLocalFallback(notice);
           return;
         }
@@ -395,6 +464,8 @@ export default function App() {
           summary?: string;
           settings?: Partial<RenderSettings>;
         };
+
+        if (!isCurrent()) return;
 
         if (data?.settings) {
           setSettings((prev) => ({ ...prev, ...data.settings }));
@@ -406,9 +477,9 @@ export default function App() {
           applyLocalFallback();
         }
       } catch {
-        applyLocalFallback('Network unavailable — applied instant local image analysis.');
+        applyLocalFallback('Offline — applied a local analysis instead.');
       } finally {
-        setIsAutoTuning(false);
+        if (isCurrent()) setIsAutoTuning(false);
       }
     },
     [settings, allPalettes, allRamps, setSettings]
@@ -479,37 +550,27 @@ export default function App() {
       : DEFAULT_RENDER_SETTINGS.columns;
     setSettings({ ...DEFAULT_RENDER_SETTINGS, columns: cols });
     setPhosphorTheme('p31');
-    setTuneSummary(null);
-    setTuneSource(null);
-    setTuneError(null);
+    clearTuneSession();
   };
+
+  // Guided mode has no dither/color sheets; fall back to the style sheet so the
+  // bottom bar can never point at a panel it does not render.
+  useEffect(() => {
+    if (controlMode === 'simple' && (mobileSheet === 'dither' || mobileSheet === 'color')) {
+      setMobileSheet('mode');
+    }
+  }, [controlMode, mobileSheet]);
 
   const modeSwitcher = (
     <div className="border-b border-[var(--pg-border)] bg-[var(--pg-surface)] p-3">
-      <div className="grid grid-cols-2 gap-1 rounded-md border border-[var(--pg-border)] bg-[var(--pg-well)] p-1">
-        <button
-          type="button"
-          onClick={() => setControlMode('simple')}
-          className={`min-h-[34px] rounded px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-            controlMode === 'simple'
-              ? 'bg-[var(--pg-accent)] text-[var(--pg-accent-ink)] font-semibold'
-              : 'text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
-          }`}
-        >
-          Guided (Simple)
-        </button>
-        <button
-          type="button"
-          onClick={() => setControlMode('pro')}
-          className={`min-h-[34px] rounded px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
-            controlMode === 'pro'
-              ? 'bg-[var(--pg-accent)] text-[var(--pg-accent-ink)] font-semibold'
-              : 'text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
-          }`}
-        >
-          Pro Controls
-        </button>
-      </div>
+      <Segmented
+        value={controlMode}
+        options={[
+          { id: 'simple', label: 'Guided', compactLabel: 'Guided' },
+          { id: 'pro', label: 'Pro', compactLabel: 'Pro' },
+        ]}
+        onChange={setControlMode}
+      />
     </div>
   );
 
@@ -517,11 +578,15 @@ export default function App() {
     <div className="flex h-dvh flex-col overflow-hidden bg-[var(--pg-bg)] text-[var(--pg-text)]">
       <StudioHeader
         activeSection={activeSection}
-        onSelectSection={setActiveSection}
-        onOpenExport={() => setExportOpen(true)}
+        canExport={renderResult !== null}
+        onSelectSection={(section) => {
+          if (section === 'studio') closeOverlay();
+          else openOverlay(section);
+        }}
+        onOpenExport={() => openOverlay('export')}
       />
 
-      <main className="flex flex-1 min-h-0 overflow-hidden pb-14 lg:pb-0">
+      <main className="pg-main-gutter flex min-h-0 flex-1 overflow-hidden">
         <CRTCanvasViewport
           sourceImage={sourceImage}
           renderResult={renderResult}
@@ -569,8 +634,8 @@ export default function App() {
                 onUpdateSettings={handleUpdateSettings}
                 onChangePhosphorTheme={setPhosphorTheme}
                 onResetDefaults={handleResetDefaults}
-                onOpenPaletteEditor={() => setActiveSection('palettes')}
-                onOpenCharEditor={() => setActiveSection('characters')}
+                onOpenPaletteEditor={() => openOverlay('palettes')}
+                onOpenCharEditor={() => openOverlay('characters')}
                 onAutoFitNow={handleAutoFitNow}
               />
             )}
@@ -581,11 +646,12 @@ export default function App() {
       {/* Mobile Thumb-Zone Bottom Bar & Slide-Up Inspector Sheet */}
       <MobileBottomBar
         activeSheet={mobileSheet}
+        controlMode={controlMode}
         onSelectSheet={setMobileSheet}
-        onOpenPalettes={() => setActiveSection('palettes')}
-        onOpenCharacters={() => setActiveSection('characters')}
-        onOpenPresets={() => setActiveSection('presets')}
-        onOpenBatch={() => setActiveSection('batch')}
+        onOpenPalettes={() => openOverlay('palettes')}
+        onOpenCharacters={() => openOverlay('characters')}
+        onOpenPresets={() => openOverlay('presets')}
+        onOpenBatch={() => openOverlay('batch')}
       >
         {mobileSheet === 'mode' && controlMode === 'simple' ? (
           <>
@@ -621,11 +687,11 @@ export default function App() {
               onResetDefaults={handleResetDefaults}
               onOpenPaletteEditor={() => {
                 setMobileSheet('none');
-                setActiveSection('palettes');
+                openOverlay('palettes');
               }}
               onOpenCharEditor={() => {
                 setMobileSheet('none');
-                setActiveSection('characters');
+                openOverlay('characters');
               }}
               onAutoFitNow={handleAutoFitNow}
             />
@@ -633,7 +699,7 @@ export default function App() {
         )}
       </MobileBottomBar>
 
-      {activeSection === 'palettes' && (
+      {overlay === 'palettes' && (
         <PaletteEditorModal
           palettes={allPalettes}
           activePaletteId={settings.paletteId}
@@ -642,52 +708,59 @@ export default function App() {
           }
           onSavePalette={handleSavePalette}
           onDeletePalette={handleDeletePalette}
-          onClose={() => setActiveSection('studio')}
+          onClose={closeOverlay}
         />
       )}
 
-      {activeSection === 'characters' && (
+      {overlay === 'characters' && (
         <CharRampEditorModal
           charRamps={allRamps}
           activeRampId={settings.charRampId}
           onSelectRamp={(id) => handleUpdateSettings({ charRampId: id, mode: 'ascii' })}
           onSaveRamp={handleSaveRamp}
           onDeleteRamp={handleDeleteRamp}
-          onClose={() => setActiveSection('studio')}
+          onClose={closeOverlay}
         />
       )}
 
-      {activeSection === 'presets' && (
+      {overlay === 'presets' && (
         <PresetsModal
           presets={allPresets}
           currentSettings={settings}
-          onApplyPreset={(presetSettings) => setSettings({ ...presetSettings })}
+          onApplyPreset={(presetSettings) => {
+            clearTuneSession();
+            setSettings({ ...presetSettings });
+          }}
           onSavePreset={handleSavePreset}
           onDeletePreset={handleDeletePreset}
           onResetDefaults={handleResetDefaults}
-          onClose={() => setActiveSection('studio')}
+          onClose={closeOverlay}
         />
       )}
 
-      {activeSection === 'batch' && (
+      {overlay === 'batch' && (
         <BatchModal
           settings={settings}
           palette={activePalette}
           charRamp={activeRamp}
-          onClose={() => setActiveSection('studio')}
+          onClose={closeOverlay}
         />
       )}
 
-      {exportOpen && (
+      {overlay === 'export' && renderResult && (
         <ExportModal
           renderResult={renderResult}
           settings={settings}
           sourceName={sourceImage?.name ?? 'phosphorgrid'}
-          onClose={() => setExportOpen(false)}
+          onClose={closeOverlay}
         />
       )}
 
-      <OfflineIndicator />
+      {/* Offline and update notices share one stack so they can never overlap. */}
+      <div className="pg-safe-x pg-above-bar pointer-events-none fixed inset-x-3 z-40 flex flex-col items-start gap-2 lg:inset-x-auto lg:right-4 lg:items-end">
+        <OfflineIndicator />
+        <PWAUpdateToast />
+      </div>
     </div>
   );
 }

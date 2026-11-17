@@ -2,6 +2,10 @@ import React from 'react';
 import { WifiOff } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
+/**
+ * Plain chip: the studio's status rail owns positioning so this notice can
+ * never collide with the update notice.
+ */
 export const OfflineIndicator: React.FC = () => {
   const isOnline = useOnlineStatus();
 
@@ -11,10 +15,10 @@ export const OfflineIndicator: React.FC = () => {
     <div
       role="status"
       aria-live="polite"
-      className="fixed bottom-20 lg:bottom-4 left-4 z-50 flex items-center gap-2 rounded-md border border-amber-500/40 bg-[var(--pg-surface)] px-3 py-2 text-xs font-medium text-amber-300 shadow-lg"
+      className="pointer-events-auto flex items-center gap-2 rounded-md border border-[var(--pg-warn)]/40 bg-[var(--pg-surface)]/95 px-3 py-2 text-xs font-medium text-[var(--pg-warn)] shadow-lg backdrop-blur"
     >
-      <WifiOff className="w-3.5 h-3.5 shrink-0 text-amber-400" aria-hidden="true" />
-      <span>Offline Mode — Local processing active</span>
+      <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>Offline — rendering locally</span>
     </div>
   );
 };

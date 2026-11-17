@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { ArrowLeftRight, CopyPlus, Plus, Trash2, X } from 'lucide-react';
+import { ArrowLeftRight, CopyPlus, Plus, Trash2 } from 'lucide-react';
 import type { CharRampDefinition } from '../types/studio';
+import { ModalShell } from './ui/Modal';
 
 interface CharRampEditorModalProps {
   charRamps: CharRampDefinition[];
@@ -73,28 +74,15 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
   const glyphArray = Array.from(draftChars);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-surface)] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[var(--pg-border)] px-5 py-3.5">
-          <div>
-            <h2 className="font-display text-base font-semibold text-[var(--pg-text)]">
-              ASCII &amp; Unicode Character Ramp Editor
-            </h2>
-            <p className="text-xs text-[var(--pg-muted)]">
-              Ordered from darkest/sparsest (left) to brightest/densest (right).
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-elevated)] hover:text-[var(--pg-text)] cursor-pointer"
-            aria-label="Close character ramp editor"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="grid flex-1 min-h-0 grid-cols-1 md:grid-cols-[240px_1fr] divide-y md:divide-y-0 md:divide-x divide-[var(--pg-border)]">
+    <ModalShell
+      title="Character ramps"
+      subtitle="Ordered darkest to brightest, left to right."
+      size="lg"
+      onClose={onClose}
+      closeLabel="Close character ramp editor"
+      bodyClassName="p-0"
+    >
+        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] divide-y md:divide-y-0 md:divide-x divide-[var(--pg-border)]">
           {/* Left Ramp Selector */}
           <div className="flex flex-col min-h-0 bg-[var(--pg-well)]">
             <div className="p-3 border-b border-[var(--pg-border)]">
@@ -104,10 +92,10 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
                 className="flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3 py-2 text-xs font-semibold text-[var(--pg-accent-ink)] hover:opacity-90 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>New Custom Ramp</span>
+                <span>New ramp</span>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto pg-scroll p-2 space-y-1">
+            <div className="max-h-[32dvh] overflow-y-auto pg-scroll pg-sheet-body p-2 space-y-1 md:max-h-none">
               {charRamps.map((ramp) => {
                 const isSelected = ramp.id === current.id;
                 const isActive = ramp.id === activeRampId;
@@ -149,12 +137,12 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--pg-text)]">{current.name}</h3>
                   <p className="text-xs text-[var(--pg-muted)]">
-                    Built-in character set. Duplicate to customize glyph order.
+                    Built-in and read-only. Duplicate it to reorder the glyphs.
                   </p>
                 </div>
               ) : (
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-[var(--pg-muted)] mb-1">Ramp Name</label>
+                  <label className="block text-xs text-[var(--pg-muted)] mb-1">Name</label>
                   <input
                     type="text"
                     value={draftName}
@@ -181,7 +169,7 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
                       const fallback = charRamps.find((r) => r.id !== current.id) ?? charRamps[0];
                       loadRampIntoDraft(fallback);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-[var(--pg-well)] px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-950/40 cursor-pointer"
+                    className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md border border-[var(--pg-danger)]/45 bg-[var(--pg-danger-soft)] px-3 py-1.5 text-xs font-medium text-[var(--pg-danger)] hover:border-[var(--pg-danger)] cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Delete</span>
@@ -194,7 +182,7 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-[var(--pg-muted)]">
-                  Character Sequence ({glyphArray.length} glyphs)
+                  Glyphs ({glyphArray.length})
                 </label>
                 {!current.isBuiltIn && (
                   <button
@@ -203,7 +191,7 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
                     className="inline-flex items-center gap-1 rounded border border-[var(--pg-border)] bg-[var(--pg-well)] px-2.5 py-1 text-xs text-[var(--pg-muted)] hover:text-[var(--pg-text)] cursor-pointer"
                   >
                     <ArrowLeftRight className="w-3 h-3" aria-hidden="true" />
-                    <span>Reverse Order</span>
+                    <span>Reverse</span>
                   </button>
                 )}
               </div>
@@ -219,7 +207,7 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
             {/* Live Density Gradient Strip */}
             <div className="space-y-1.5">
               <span className="block text-xs font-medium text-[var(--pg-muted)]">
-                Density Gradient Preview
+                Density
               </span>
               <div className="flex overflow-x-auto rounded-md border border-[var(--pg-border)] bg-black p-3 font-mono-grid text-lg leading-none text-[var(--pg-accent)]">
                 {glyphArray.map((ch, idx) => (
@@ -237,7 +225,7 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
             {!current.isBuiltIn && (
               <div className="space-y-3 border-t border-[var(--pg-border)] pt-4">
                 <span className="block text-xs font-medium text-[var(--pg-muted)]">
-                  Quick-Insert Unicode Glyphs
+                  Insert a glyph
                 </span>
                 <div className="space-y-2.5">
                   {UNICODE_GLYPH_BANKS.map((bank) => (
@@ -249,7 +237,7 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
                             key={g}
                             type="button"
                             onClick={() => commitEdits(draftChars + g)}
-                            className="flex h-8 w-8 items-center justify-center rounded border border-[var(--pg-border-strong)] bg-[var(--pg-well)] font-mono-grid text-sm text-[var(--pg-text)] hover:border-[var(--pg-accent)] hover:text-[var(--pg-accent)] cursor-pointer"
+                            className="pg-tap flex h-9 w-9 items-center justify-center rounded border border-[var(--pg-border-strong)] bg-[var(--pg-well)] font-mono-grid text-sm text-[var(--pg-text)] transition-colors hover:border-[var(--pg-accent)] hover:text-[var(--pg-accent)]"
                             title={`Append "${g}"`}
                           >
                             {g === ' ' ? '␣' : g}
@@ -263,7 +251,6 @@ export const CharRampEditorModal: React.FC<CharRampEditorModalProps> = ({
             )}
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

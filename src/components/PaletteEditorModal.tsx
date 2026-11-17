@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowDownUp, CopyPlus, Plus, Trash2, Upload, X } from 'lucide-react';
 import { hexToRgb, relativeLuminance } from '../engine/imageProcessor';
 import type { PaletteDefinition } from '../types/studio';
+import { Button, ModalShell } from './ui/Modal';
 
 interface PaletteEditorModalProps {
   palettes: PaletteDefinition[];
@@ -118,29 +119,15 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
-      <div className="flex max-h-[88vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-surface)] shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-[var(--pg-border)] px-5 py-3.5">
-          <div>
-            <h2 className="font-display text-base font-semibold text-[var(--pg-text)]">
-              Color Palette Studio
-            </h2>
-            <p className="text-xs text-[var(--pg-muted)]">
-              Select a hardware palette or build custom quantized swatch ramps.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-elevated)] hover:text-[var(--pg-text)] cursor-pointer"
-            aria-label="Close palette studio"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="grid flex-1 min-h-0 grid-cols-1 md:grid-cols-[240px_1fr] divide-y md:divide-y-0 md:divide-x divide-[var(--pg-border)]">
+    <ModalShell
+      title="Palettes"
+      subtitle="Choose a hardware palette or build your own."
+      size="lg"
+      onClose={onClose}
+      closeLabel="Close palette studio"
+      bodyClassName="p-0"
+    >
+        <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] divide-y md:divide-y-0 md:divide-x divide-[var(--pg-border)]">
           {/* Left Palette List */}
           <div className="flex flex-col min-h-0 bg-[var(--pg-well)]">
             <div className="p-3 border-b border-[var(--pg-border)]">
@@ -150,10 +137,10 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                 className="flex w-full items-center justify-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3 py-2 text-xs font-semibold text-[var(--pg-accent-ink)] hover:opacity-90 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>New Custom Palette</span>
+                <span>New palette</span>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto pg-scroll p-2 space-y-1">
+            <div className="max-h-[32dvh] overflow-y-auto pg-scroll pg-sheet-body p-2 space-y-1 md:max-h-none">
               {palettes.map((pal) => {
                 const isSelected = pal.id === current.id;
                 const isActiveOnCanvas = pal.id === activePaletteId;
@@ -197,12 +184,12 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                 <div>
                   <h3 className="text-sm font-semibold text-[var(--pg-text)]">{current.name}</h3>
                   <p className="text-xs text-[var(--pg-muted)]">
-                    Built-in read-only palette. Duplicate to customize swatches.
+                    Built-in and read-only. Duplicate it to edit the swatches.
                   </p>
                 </div>
               ) : (
                 <div className="flex-1 min-w-[200px]">
-                  <label className="block text-xs text-[var(--pg-muted)] mb-1">Palette Name</label>
+                  <label className="block text-xs text-[var(--pg-muted)] mb-1">Name</label>
                   <input
                     type="text"
                     value={draftName}
@@ -229,7 +216,7 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                       const fallback = palettes.find((p) => p.id !== current.id) ?? palettes[0];
                       loadPaletteIntoDraft(fallback);
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-red-500/40 bg-[var(--pg-well)] px-3 py-1.5 text-xs font-medium text-red-300 hover:bg-red-950/40 cursor-pointer"
+                    className="inline-flex min-h-[34px] items-center gap-1.5 rounded-md border border-[var(--pg-danger)]/45 bg-[var(--pg-danger-soft)] px-3 py-1.5 text-xs font-medium text-[var(--pg-danger)] hover:border-[var(--pg-danger)] cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Delete</span>
@@ -252,7 +239,7 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                       className="inline-flex items-center gap-1 rounded border border-[var(--pg-border)] bg-[var(--pg-well)] px-2.5 py-1 text-xs text-[var(--pg-muted)] hover:text-[var(--pg-text)] cursor-pointer"
                     >
                       <ArrowDownUp className="w-3 h-3" aria-hidden="true" />
-                      <span>Sort Luminance</span>
+                      <span>Sort by luminance</span>
                     </button>
                     <button
                       type="button"
@@ -260,7 +247,7 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                       className="inline-flex items-center gap-1 rounded border border-[var(--pg-accent)] bg-[var(--pg-accent-soft)] px-2.5 py-1 text-xs font-medium text-[var(--pg-accent)] cursor-pointer"
                     >
                       <Plus className="w-3 h-3" aria-hidden="true" />
-                      <span>Add Swatch</span>
+                      <span>Add swatch</span>
                     </button>
                   </div>
                 )}
@@ -298,7 +285,7 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                       <button
                         type="button"
                         onClick={() => commitEdits(draftColors.filter((_, i) => i !== index))}
-                        className="p-1 text-[var(--pg-muted)] hover:text-red-300 cursor-pointer"
+                        className="pg-tap flex h-8 w-8 items-center justify-center rounded text-[var(--pg-muted)] transition-colors hover:text-[var(--pg-danger)]"
                         aria-label={`Remove color ${hex}`}
                       >
                         <X className="w-3.5 h-3.5" />
@@ -313,7 +300,7 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
             <div className="space-y-2 border-t border-[var(--pg-border)] pt-4">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-[var(--pg-muted)]">
-                  Import JSON Palette
+                  Import JSON
                 </span>
                 <button
                   type="button"
@@ -324,7 +311,7 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                   }
                   className="text-xs text-[var(--pg-accent)] hover:underline cursor-pointer"
                 >
-                  Copy Current as JSON
+                  Copy as JSON
                 </button>
               </div>
               <div className="flex gap-2">
@@ -344,11 +331,10 @@ export const PaletteEditorModal: React.FC<PaletteEditorModalProps> = ({
                   <span>Import</span>
                 </button>
               </div>
-              {importError && <p className="text-xs text-red-400">{importError}</p>}
+              {importError && <p className="text-xs text-[var(--pg-danger)]">{importError}</p>}
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </ModalShell>
   );
 };

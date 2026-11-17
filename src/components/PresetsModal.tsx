@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Check, Plus, RotateCcw, Trash2, X } from 'lucide-react';
+import { Check, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import type { RenderSettings, StudioPreset } from '../types/studio';
+import { Button, ModalShell, SectionHeading } from './ui/Modal';
 
 interface PresetsModalProps {
   presets: StudioPreset[];
@@ -31,123 +32,109 @@ export const PresetsModal: React.FC<PresetsModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs">
-      <div className="flex max-h-[85vh] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-[var(--pg-border-strong)] bg-[var(--pg-surface)] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-[var(--pg-border)] px-5 py-3.5">
-          <div>
-            <h2 className="font-display text-base font-semibold text-[var(--pg-text)]">
-              Studio Presets
-            </h2>
-            <p className="text-xs text-[var(--pg-muted)]">
-              Save current render, dither, and color recipes offline or recall curated styles.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded text-[var(--pg-muted)] hover:bg-[var(--pg-elevated)] hover:text-[var(--pg-text)] cursor-pointer"
-            aria-label="Close presets"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <form
-          onSubmit={handleCreate}
-          className="flex items-center gap-2 border-b border-[var(--pg-border)] bg-[var(--pg-well)] px-5 py-3"
-        >
+    <ModalShell
+      title="Presets"
+      subtitle="Save this look, or recall one you saved. Presets live in this browser."
+      onClose={onClose}
+      closeLabel="Close presets"
+      toolbar={
+        <form onSubmit={handleCreate} className="flex items-center gap-2 px-4 py-2.5 sm:px-5">
           <input
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Name current settings snapshot..."
-            className="flex-1 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-surface)] px-3 py-2 text-xs text-[var(--pg-text)] focus:border-[var(--pg-accent)] focus:outline-none"
+            placeholder="Name this look…"
+            aria-label="New preset name"
+            className="min-h-[40px] min-w-0 flex-1 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-surface)] px-3 py-2 text-xs text-[var(--pg-text)] placeholder:text-[var(--pg-muted)]/70 focus:border-[var(--pg-accent)] focus:outline-none"
           />
-          <button
-            type="submit"
-            disabled={!newName.trim()}
-            className="inline-flex items-center gap-1.5 rounded-md bg-[var(--pg-accent)] px-3.5 py-2 text-xs font-semibold text-[var(--pg-accent-ink)] disabled:opacity-40 cursor-pointer whitespace-nowrap"
-          >
-            <Plus className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Save Preset</span>
-          </button>
+          <Button type="submit" variant="primary" disabled={!newName.trim()}>
+            <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+            <span className="hidden sm:inline">Save preset</span>
+            <span className="sm:hidden">Save</span>
+          </Button>
         </form>
-
-        <div className="flex-1 overflow-y-auto pg-scroll divide-y divide-[var(--pg-border)]">
-          {presets.map((preset) => (
-            <div
-              key={preset.id}
-              className="flex items-center justify-between gap-3 px-5 py-3 hover:bg-[var(--pg-elevated)]/40 transition-colors"
-            >
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-medium text-[var(--pg-text)]">
-                    {preset.name}
+      }
+      footer={
+        <>
+          <Button variant="ghost" onClick={onResetDefaults} className="mr-auto px-0">
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>Reset all</span>
+          </Button>
+          <Button onClick={onClose}>Done</Button>
+        </>
+      }
+    >
+      <div className="divide-y divide-[var(--pg-border)]">
+        {presets.map((preset) => (
+          <div
+            key={preset.id}
+            className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-[var(--pg-elevated)]/40 sm:px-5"
+          >
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="truncate text-sm font-medium text-[var(--pg-text)]">
+                  {preset.name}
+                </span>
+                {preset.isBuiltIn ? (
+                  <span className="shrink-0 rounded border border-[var(--pg-border)] px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-[var(--pg-muted)]">
+                    Built-in
                   </span>
-                </div>
-                <div className="mt-0.5 flex items-center gap-2 text-xs text-[var(--pg-muted)] font-mono-grid">
-                  <span>{preset.settings.mode}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{preset.settings.ditherAlgorithm}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{preset.settings.colorMode}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{preset.settings.columns} cols</span>
-                </div>
+                ) : null}
               </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {!preset.isBuiltIn && (
-                  <button
-                    type="button"
-                    onClick={() => onDeletePreset(preset.id)}
-                    className="flex h-8 w-8 items-center justify-center rounded border border-[var(--pg-border)] text-[var(--pg-muted)] hover:border-red-500/40 hover:text-red-300 cursor-pointer"
-                    aria-label={`Delete preset ${preset.name}`}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => {
-                    onApplyPreset(preset.settings);
-                    setAppliedId(preset.id);
-                    setTimeout(() => setAppliedId(null), 1200);
-                  }}
-                  className="inline-flex min-w-[76px] items-center justify-center gap-1.5 rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-well)] px-3 py-1.5 text-xs font-medium text-[var(--pg-text)] hover:border-[var(--pg-accent)] hover:text-[var(--pg-accent)] cursor-pointer"
-                >
-                  {appliedId === preset.id ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-[var(--pg-accent)]" />
-                      <span>Applied</span>
-                    </>
-                  ) : (
-                    <span>Apply</span>
-                  )}
-                </button>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 font-mono-grid text-[11px] text-[var(--pg-muted)]">
+                <span>{preset.settings.mode}</span>
+                <span aria-hidden="true">·</span>
+                <span>{preset.settings.ditherAlgorithm}</span>
+                <span aria-hidden="true">·</span>
+                <span>{preset.settings.colorMode}</span>
+                <span aria-hidden="true">·</span>
+                <span>{preset.settings.columns} cols</span>
               </div>
             </div>
-          ))}
-        </div>
 
-        <div className="flex items-center justify-between border-t border-[var(--pg-border)] bg-[var(--pg-well)] px-5 py-3">
-          <button
-            type="button"
-            onClick={onResetDefaults}
-            className="inline-flex items-center gap-1.5 text-xs text-[var(--pg-muted)] hover:text-[var(--pg-text)] cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-            <span>Reset to Factory Defaults</span>
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-[var(--pg-border-strong)] bg-[var(--pg-surface)] px-4 py-1.5 text-xs font-medium text-[var(--pg-text)] hover:border-[var(--pg-accent)] cursor-pointer"
-          >
-            Done
-          </button>
-        </div>
+            <div className="flex shrink-0 items-center gap-2">
+              {!preset.isBuiltIn && (
+                <button
+                  type="button"
+                  onClick={() => onDeletePreset(preset.id)}
+                  className="pg-tap flex h-9 w-9 items-center justify-center rounded-md border border-[var(--pg-border)] text-[var(--pg-muted)] transition-colors hover:border-[var(--pg-danger)]/45 hover:text-[var(--pg-danger)]"
+                  aria-label={`Delete preset ${preset.name}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <Button
+                size="sm"
+                variant={appliedId === preset.id ? 'primary' : 'secondary'}
+                onClick={() => {
+                  onApplyPreset(preset.settings);
+                  setAppliedId(preset.id);
+                  setTimeout(() => setAppliedId(null), 1200);
+                }}
+                className="min-w-[82px]"
+              >
+                {appliedId === preset.id ? (
+                  <>
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Applied</span>
+                  </>
+                ) : (
+                  <span>Apply</span>
+                )}
+              </Button>
+            </div>
+          </div>
+        ))}
+
+        {presets.length === 0 && (
+          <div className="px-5 py-10 text-center">
+            <SectionHeading className="justify-center">No presets yet</SectionHeading>
+            <p className="mt-1 text-xs text-[var(--pg-muted)]">
+              Save a snapshot above to reuse this look. Presets live in this browser.
+            </p>
+          </div>
+        )}
       </div>
-    </div>
+    </ModalShell>
   );
 };

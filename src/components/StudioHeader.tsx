@@ -1,10 +1,13 @@
 import React from 'react';
 import { Download } from 'lucide-react';
 import type { WorkspaceSection } from '../types/studio';
+import { Button } from './ui/Modal';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface StudioHeaderProps {
   activeSection: WorkspaceSection;
+  /** Export has no empty state, so the action is disabled until a render exists. */
+  canExport: boolean;
   onSelectSection: (section: WorkspaceSection) => void;
   onOpenExport: () => void;
 }
@@ -19,25 +22,26 @@ const NAV_ITEMS: ReadonlyArray<{ id: WorkspaceSection; label: string }> = [
 
 export const StudioHeader: React.FC<StudioHeaderProps> = ({
   activeSection,
+  canExport,
   onSelectSection,
   onOpenExport,
 }) => {
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between gap-4 lg:gap-8 border-b border-[var(--pg-border)] bg-[var(--pg-surface)] px-4 lg:px-6">
-      {/* Zone 1: Single-element Brand Wordmark */}
+    <header className="pg-safe-top pg-safe-x sticky top-0 z-30 flex min-h-14 shrink-0 items-center justify-between gap-4 border-b border-[var(--pg-border)] bg-[var(--pg-surface)] px-4 lg:gap-8 lg:px-6">
+      {/* Zone 1: single-element brand wordmark */}
       <a
         href="#studio"
-        onClick={(e) => {
-          e.preventDefault();
+        onClick={(event) => {
+          event.preventDefault();
           onSelectSection('studio');
         }}
-        className="font-display text-lg font-bold tracking-tight text-[var(--pg-text)] whitespace-nowrap shrink-0 hover:text-[var(--pg-accent)] transition-colors"
+        className="font-display shrink-0 whitespace-nowrap text-lg font-bold tracking-tight text-[var(--pg-text)] transition-colors hover:text-[var(--pg-accent)]"
       >
         PhosphorGrid
       </a>
 
-      {/* Zone 2: 4 clean single-line navigation links */}
-      <nav className="hidden md:flex items-center gap-6" aria-label="Workspace navigation">
+      {/* Zone 2: single-line workspace navigation */}
+      <nav className="hidden items-center gap-6 md:flex" aria-label="Workspace navigation">
         {NAV_ITEMS.map((item) => {
           const isActive = activeSection === item.id;
           return (
@@ -45,7 +49,8 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
               key={item.id}
               type="button"
               onClick={() => onSelectSection(item.id)}
-              className={`relative py-1 text-sm font-medium transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              aria-current={isActive ? 'page' : undefined}
+              className={`pg-tap relative shrink-0 whitespace-nowrap py-1 text-sm font-medium transition-colors ${
                 isActive
                   ? 'text-[var(--pg-accent)]'
                   : 'text-[var(--pg-muted)] hover:text-[var(--pg-text)]'
@@ -63,17 +68,19 @@ export const StudioHeader: React.FC<StudioHeaderProps> = ({
         })}
       </nav>
 
-      {/* Zone 3: Primary Export Action (+ conditional PWA install) */}
-      <div className="flex items-center gap-2.5 shrink-0">
+      {/* Zone 3: primary export action (+ conditional install affordance) */}
+      <div className="flex shrink-0 items-center gap-2">
         <PWAInstallButton />
-        <button
-          type="button"
+        <Button
+          variant="primary"
           onClick={onOpenExport}
-          className="inline-flex items-center gap-2 rounded-md bg-[var(--pg-accent)] px-4 py-2 text-xs font-semibold text-[var(--pg-accent-ink)] hover:opacity-90 active:scale-[0.98] transition-all whitespace-nowrap shrink-0 cursor-pointer"
+          disabled={!canExport}
+          title={canExport ? 'Export artwork' : 'Load an image to export'}
+          className="shrink-0"
         >
-          <Download className="w-3.5 h-3.5" aria-hidden="true" />
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
           <span>Export</span>
-        </button>
+        </Button>
       </div>
     </header>
   );
