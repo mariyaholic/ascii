@@ -10,7 +10,8 @@ use eframe::egui;
 use phosphorgrid_core::{
     auto_fit_columns, char_ramp_by_id, compute_local_auto_tune, export, palette_by_id,
     render_blocks_rgba, render_with_settings, AnsiColorDepth, CharRamp, ColorMode, DitherAlgorithm,
-    Palette, RenderMode, RenderResult, RenderSettings, Rgb,
+    Notice, Palette, PreviewState, RenderMode, RenderResult, RenderSettings, Rgb, TuneSession,
+    TuneSource,
 };
 
 fn main() -> eframe::Result<()> {
@@ -137,9 +138,14 @@ struct StudioApp {
     result: Option<RenderResult>,
     texture: Option<egui::TextureHandle>,
     text_lines: Vec<(String, egui::Color32)>,
-    dirty: bool,
-    status: String,
-    error: Option<String>,
+    /// Replaces the old `dirty` flag: a preview can only go stale once a
+    /// source exists.
+    preview: PreviewState,
+    /// Exactly one line in the status bar: either status or error.
+    notice: Notice,
+    /// Auto-tune session, shared with the browser studio's state machine.
+    tune: TuneSession,
+    tune_seq: u64,
     goal: String,
     path_input: String,
     output_dir: String,
@@ -162,9 +168,12 @@ impl StudioApp {
             result: None,
             texture: None,
             text_lines: Vec::new(),
-            dirty: false,
-            status: "Drop an image on the window, or type a path below.".to_string(),
-            error: None,
+            preview: PreviewState::Empty,
+            notice: Notice::Status(
+                "Drop an image on the window, or type a path below.".to_string(),
+            ),
+            tune: TuneSession::Idle,
+            tune_seq: 0,
             goal: String::new(),
             path_input: String::new(),
             output_dir: "phosphorgrid-out".to_string(),
@@ -195,12 +204,13 @@ impl StudioApp {
                     height,
                     rgba: rgba.into_raw(),
                 });
-                self.dirty = true;
-                self.error = None;
-                self.status = format!("Loaded {} ({width}×{height})", path.display());
+                self.tune.cancel();
+                self.preview.source_loaded();
+                self.notice =
+                    Notice::Status(format!("Loaded {} ({width}×{height})", path.display()));
             }
             Err(error) => {
-                self.error = Some(format!("Could not open {}: {error}", path.display()));
+                self.notice = Notice::Error(format!("Could not open {}: {error}", path.display()));
             }
         }
     }
@@ -257,23 +267,33 @@ impl StudioApp {
             }
         }
 
-        self.status = format!(
-            "{}×{} cells · {:.1} ms · {} · {}",
-            result.cols,
-            result.rows,
-            result.render_time_ms,
-            result.mode.label(),
-            self.settings.color_mode.label()
-        );
         self.result = Some(result);
-        self.dirty = false;
+        self.preview.rendered();
+        self.notice = Notice::Status(self.render_summary());
+    }
+
+    fn render_summary(&self) -> String {
+        match &self.result {
+            Some(result) => format!(
+                "{}×{} cells · {:.1} ms · {} · {}",
+                result.cols,
+                result.rows,
+                result.render_time_ms,
+                result.mode.label(),
+                self.settings.color_mode.label()
+            ),
+            None => "Drop an image on the window, or type a path below.".to_string(),
+        }
     }
 
     fn auto_tune(&mut self) {
         let Some(source) = self.source.as_ref() else {
-            self.error = Some("Load an image before auto-tuning.".to_string());
+            self.notice = Notice::Error("Load an image before auto-tuning.".to_string());
             return;
         };
+        self.tune_seq += 1;
+        let request_id = self.tune_seq;
+        self.tune.start(request_id, &self.settings);
         let goal = if self.goal.trim().is_empty() {
             None
         } else {
@@ -286,6 +306,16 @@ impl StudioApp {
             &self.settings,
             goal,
         );
+        // The native tuner is synchronous, so the request is always current;
+        // going through the machine keeps undo semantics identical to the PWA.
+        if !self.tune.resolve(
+            request_id,
+            recommendation.summary.clone(),
+            TuneSource::Local,
+            None,
+        ) {
+            return;
+        }
         self.settings = recommendation.settings;
         self.theme = match self.settings.color_mode {
             ColorMode::Mono => match self.settings.palette_id.as_str() {
@@ -295,13 +325,22 @@ impl StudioApp {
             },
             _ => self.theme,
         };
-        self.status = recommendation.summary;
-        self.dirty = true;
+        self.notice = Notice::Status(recommendation.summary);
+        self.preview.invalidate();
+    }
+
+    fn undo_tune(&mut self) {
+        if let Some(snapshot) = self.tune.undo() {
+            self.settings = snapshot;
+            self.notice =
+                Notice::Status("Restored your settings from before auto-tune.".to_string());
+            self.preview.invalidate();
+        }
     }
 
     fn export(&mut self, format: &str) {
         let Some(result) = self.result.as_ref() else {
-            self.error = Some("Nothing rendered yet.".to_string());
+            self.notice = Notice::Error("Nothing rendered yet.".to_string());
             return;
         };
         let stem = self
@@ -350,22 +389,26 @@ impl StudioApp {
             Ok(bytes) => {
                 let directory = PathBuf::from(&self.output_dir);
                 if let Err(error) = std::fs::create_dir_all(&directory) {
-                    self.error = Some(format!("Could not create {}: {error}", directory.display()));
+                    self.notice =
+                        Notice::Error(format!("Could not create {}: {error}", directory.display()));
                     return;
                 }
                 let path = directory.join(format!("{stem}.{format}"));
                 match std::fs::write(&path, &bytes) {
                     Ok(()) => {
-                        self.status =
-                            format!("Exported {} ({} bytes)", path.display(), bytes.len());
-                        self.error = None;
+                        self.notice = Notice::Status(format!(
+                            "Exported {} ({} bytes)",
+                            path.display(),
+                            bytes.len()
+                        ));
                     }
                     Err(error) => {
-                        self.error = Some(format!("Could not write {}: {error}", path.display()));
+                        self.notice =
+                            Notice::Error(format!("Could not write {}: {error}", path.display()));
                     }
                 }
             }
-            Err(message) => self.error = Some(message),
+            Err(message) => self.notice = Notice::Error(message),
         }
     }
 
@@ -399,7 +442,7 @@ impl eframe::App for StudioApp {
         self.handle_dropped_files(ctx);
         self.theme.apply(ctx);
 
-        if self.dirty {
+        if self.preview.needs_render() {
             self.render(ctx);
         }
 
@@ -469,20 +512,19 @@ impl eframe::App for StudioApp {
                     .inner_margin(egui::Margin::symmetric(14, 7)),
             )
             .show(ctx, |ui| {
-                if let Some(error) = &self.error {
-                    ui.label(
+                match &self.notice {
+                    Notice::Error(error) => ui.label(
                         egui::RichText::new(error)
                             .size(11.0)
                             .color(self.theme.accent()),
-                    );
-                } else {
-                    ui.label(
-                        egui::RichText::new(&self.status)
+                    ),
+                    Notice::Status(status) => ui.label(
+                        egui::RichText::new(status)
                             .monospace()
                             .size(11.0)
                             .color(self.theme.muted()),
-                    );
-                }
+                    ),
+                };
             });
 
         egui::CentralPanel::default()
@@ -491,7 +533,9 @@ impl eframe::App for StudioApp {
 
         if ctx.input(|input| input.key_pressed(egui::Key::Escape)) {
             // Escape clears a lingering error without closing the window.
-            self.error = None;
+            if self.notice.is_error() {
+                self.notice = Notice::Status(self.render_summary());
+            }
         }
     }
 }
@@ -528,9 +572,18 @@ impl StudioApp {
                 self.auto_tune();
             }
         });
-        if ui.button("Auto-tune this image").clicked() {
-            self.auto_tune();
-        }
+        ui.horizontal(|ui| {
+            if ui.button("Auto-tune this image").clicked() {
+                self.auto_tune();
+            }
+            if ui
+                .add_enabled(self.tune.can_undo(), egui::Button::new("Undo tune"))
+                .on_hover_text("Restore the settings from before auto-tune")
+                .clicked()
+            {
+                self.undo_tune();
+            }
+        });
 
         ui.separator();
         ui.label(section_title("Render mode & grid", self.theme));
@@ -553,14 +606,14 @@ impl StudioApp {
                 RenderMode::HalfBlock | RenderMode::Braille => 0.5,
                 RenderMode::Ascii => 0.52,
             };
-            self.dirty = true;
+            self.preview.invalidate();
         }
 
         if ui
             .add(egui::Slider::new(&mut self.settings.columns, 16..=320).text("Columns"))
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
         if self.settings.mode != RenderMode::Pixel
             && ui
@@ -570,7 +623,7 @@ impl StudioApp {
                 )
                 .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
 
         ui.separator();
@@ -579,37 +632,37 @@ impl StudioApp {
             .add(egui::Slider::new(&mut self.settings.contrast, -80.0..=80.0).text("Contrast"))
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
         if ui
             .add(egui::Slider::new(&mut self.settings.brightness, -80.0..=80.0).text("Brightness"))
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
         if ui
             .add(egui::Slider::new(&mut self.settings.gamma, 0.3..=2.6).text("Gamma"))
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
         if ui
             .add(egui::Slider::new(&mut self.settings.blur_radius, 0..=6).text("Smoothing"))
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
         if ui
             .add(egui::Slider::new(&mut self.settings.posterize_levels, 0..=32).text("Posterize"))
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
         if ui
             .add(egui::Slider::new(&mut self.settings.edge_boost, 0.0..=100.0).text("Edge boost"))
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
 
         ui.separator();
@@ -626,7 +679,7 @@ impl StudioApp {
                         )
                         .clicked()
                     {
-                        self.dirty = true;
+                        self.preview.invalidate();
                     }
                 }
             });
@@ -636,14 +689,14 @@ impl StudioApp {
             )
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
         if self.settings.dither_algorithm.is_error_diffusion()
             && ui
                 .checkbox(&mut self.settings.serpentine, "Serpentine scan")
                 .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
 
         ui.separator();
@@ -656,7 +709,7 @@ impl StudioApp {
                         .selectable_value(&mut self.settings.color_mode, mode, mode.label())
                         .clicked()
                     {
-                        self.dirty = true;
+                        self.preview.invalidate();
                     }
                 }
             });
@@ -673,7 +726,7 @@ impl StudioApp {
                             .clicked()
                         {
                             self.settings.palette_id = (*id).to_string();
-                            self.dirty = true;
+                            self.preview.invalidate();
                         }
                     }
                 });
@@ -692,7 +745,7 @@ impl StudioApp {
                             .clicked()
                         {
                             self.settings.char_ramp_id = (*id).to_string();
-                            self.dirty = true;
+                            self.preview.invalidate();
                         }
                     }
                 });
@@ -704,12 +757,12 @@ impl StudioApp {
                 let mut fg = rgb_array(self.settings.mono_foreground);
                 if ui.color_edit_button_srgb(&mut fg).changed() {
                     self.settings.mono_foreground = Rgb::new(fg[0], fg[1], fg[2]);
-                    self.dirty = true;
+                    self.preview.invalidate();
                 }
                 let mut bg = rgb_array(self.settings.background);
                 if ui.color_edit_button_srgb(&mut bg).changed() {
                     self.settings.background = Rgb::new(bg[0], bg[1], bg[2]);
-                    self.dirty = true;
+                    self.preview.invalidate();
                 }
                 ui.label(
                     egui::RichText::new("ink / paper")
@@ -723,7 +776,7 @@ impl StudioApp {
             .checkbox(&mut self.settings.inverse, "Invert light & dark")
             .changed()
         {
-            self.dirty = true;
+            self.preview.invalidate();
         }
 
         ui.separator();
@@ -737,7 +790,7 @@ impl StudioApp {
                     self.theme = theme;
                     if self.settings.color_mode == ColorMode::Mono {
                         self.settings.mono_foreground = theme.mono_foreground();
-                        self.dirty = true;
+                        self.preview.invalidate();
                     }
                 }
             }
@@ -753,13 +806,14 @@ impl StudioApp {
                     ..Default::default()
                 };
                 self.theme = TubeTheme::P31;
-                self.dirty = true;
+                self.tune.cancel();
+                self.preview.invalidate();
             }
             if ui
                 .checkbox(&mut self.settings.crt_overlay, "CRT scanlines")
                 .changed()
             {
-                self.dirty = true;
+                self.preview.invalidate();
             }
         });
 

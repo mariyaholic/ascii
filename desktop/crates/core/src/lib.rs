@@ -8,6 +8,7 @@ pub mod dither;
 pub mod export;
 pub mod library;
 pub mod render;
+pub mod session;
 pub mod settings;
 pub mod tuner;
 
@@ -17,6 +18,7 @@ pub use render::{
     compute_target_dimensions, process_image, RenderResult, TargetDimensions, BLOCK_GLYPH,
     HALF_BLOCK_GLYPH,
 };
+pub use session::{Notice, PreviewState, TuneSession, TuneSource};
 pub use settings::{auto_fit_columns, ColorMode, DitherAlgorithm, RenderMode, RenderSettings, Rgb};
 pub use tuner::{analyze_image, compute_local_auto_tune, ImageStats, StyleRecommendation};
 

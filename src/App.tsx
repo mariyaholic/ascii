@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { BatchModal } from './components/BatchModal';
 import { CharRampEditorModal } from './components/CharRampEditorModal';
 import { CRTCanvasViewport } from './components/CRTCanvasViewport';
@@ -26,6 +26,7 @@ import {
 import { processImageBuffer } from './engine/imageProcessor';
 import { computeLocalAutoTune } from './engine/localAutoTuner';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
+import { IDLE_TUNE, tuneReducer } from './state/tuneSession';
 import type {
   CharRampDefinition,
   PaletteDefinition,
@@ -146,13 +147,19 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Smart Auto-Tune state
-  const [isAutoTuning, setIsAutoTuning] = useState(false);
-  const [tuneSummary, setTuneSummary] = useState<string | null>(null);
-  const [tuneSource, setTuneSource] = useState<'api' | 'local' | null>(null);
-  const [tuneError, setTuneError] = useState<string | null>(null);
-  const [undoSnapshot, setUndoSnapshot] = useState<RenderSettings | null>(null);
+  // Auto-tune is one explicit session (see src/state/tuneSession.ts). The ref
+  // is the synchronous gate for async answers: bumping it on cancel makes any
+  // in-flight request stale before React has re-rendered.
+  const [tune, dispatchTune] = useReducer(tuneReducer, IDLE_TUNE);
   const tuneRequestRef = useRef(0);
+  const isAutoTuning = tune.phase === 'tuning';
+  const tuneSummary = tune.phase === 'tuned' ? tune.summary : null;
+  const tuneSource = tune.phase === 'tuned' ? tune.source : null;
+  const tuneError = tune.phase === 'tuned' ? tune.notice : null;
+  const canUndoTune = tune.phase === 'tuned';
+
+  // Latest image request; a slower decode of an earlier pick must not win.
+  const loadRequestRef = useRef(0);
 
   const cachedPixelsRef = useRef<CachedSourcePixels | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -266,10 +273,8 @@ export default function App() {
   }, [triggerRender]);
 
   const clearTuneSession = useCallback(() => {
-    setUndoSnapshot(null);
-    setTuneSummary(null);
-    setTuneSource(null);
-    setTuneError(null);
+    tuneRequestRef.current++;
+    dispatchTune({ type: 'CANCEL' });
   }, []);
 
   const openOverlay = useCallback(
@@ -288,9 +293,14 @@ export default function App() {
     (id: string, name: string, src: string, isObjectUrl = false) => {
       setErrorMessage(null);
       clearTuneSession();
+      const loadId = ++loadRequestRef.current;
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
+        if (loadId !== loadRequestRef.current) {
+          if (isObjectUrl) URL.revokeObjectURL(src);
+          return;
+        }
         if (objectUrlRef.current && objectUrlRef.current !== src) {
           URL.revokeObjectURL(objectUrlRef.current);
           objectUrlRef.current = null;
@@ -338,6 +348,10 @@ export default function App() {
         );
       };
       img.onerror = () => {
+        if (loadId !== loadRequestRef.current) {
+          if (isObjectUrl) URL.revokeObjectURL(src);
+          return;
+        }
         setErrorMessage(`Could not decode "${name}". Try PNG, JPG, WebP, or GIF.`);
       };
       img.src = src;
@@ -374,6 +388,22 @@ export default function App() {
     [loadImageSource]
   );
 
+  // Installed desktop PWA: "Open with PhosphorGrid" on an image file. Only
+  // the first file is used; the batch panel handles many.
+  useEffect(() => {
+    const launchQueue = (window as unknown as { launchQueue?: LaunchQueue }).launchQueue;
+    if (!launchQueue) return;
+    launchQueue.setConsumer(async (params) => {
+      const handle = params.files?.[0];
+      if (!handle) return;
+      try {
+        handleSelectFile(await handle.getFile());
+      } catch {
+        setErrorMessage('Could not open the file passed to PhosphorGrid.');
+      }
+    });
+  }, [handleSelectFile]);
+
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -408,9 +438,8 @@ export default function App() {
       const requestId = ++tuneRequestRef.current;
       const isCurrent = () => requestId === tuneRequestRef.current;
 
-      setUndoSnapshot({ ...settings });
-      setIsAutoTuning(true);
-      setTuneError(null);
+      dispatchTune({ type: 'START', requestId, current: { ...settings } });
+      let resolved = false;
 
       const applyLocalFallback = (notice?: string) => {
         if (!isCurrent()) return;
@@ -421,14 +450,18 @@ export default function App() {
           goalPrompt
         );
         setSettings((prev) => ({ ...prev, ...localRec.settings }));
-        setTuneSummary(localRec.summary);
-        setTuneSource('local');
-        if (notice) setTuneError(notice);
+        dispatchTune({
+          type: 'RESOLVE',
+          requestId,
+          summary: localRec.summary,
+          source: 'local',
+          notice: notice ?? null,
+        });
+        resolved = true;
       };
 
       if (typeof navigator !== 'undefined' && !navigator.onLine) {
         applyLocalFallback();
-        if (isCurrent()) setIsAutoTuning(false);
         return;
       }
 
@@ -469,29 +502,31 @@ export default function App() {
 
         if (data?.settings) {
           setSettings((prev) => ({ ...prev, ...data.settings }));
-          setTuneSummary(
-            data.summary ?? 'Tuned dithering, tone, and color balance for this image.'
-          );
-          setTuneSource('api');
+          dispatchTune({
+            type: 'RESOLVE',
+            requestId,
+            summary: data.summary ?? 'Tuned dithering, tone, and color balance for this image.',
+            source: 'api',
+          });
+          resolved = true;
         } else {
           applyLocalFallback();
         }
       } catch {
         applyLocalFallback('Offline — applied a local analysis instead.');
       } finally {
-        if (isCurrent()) setIsAutoTuning(false);
+        // Never leave the spinner up: if even the local analysis threw, end
+        // the session without touching settings.
+        if (isCurrent() && !resolved) clearTuneSession();
       }
     },
-    [settings, allPalettes, allRamps, setSettings]
+    [settings, allPalettes, allRamps, setSettings, clearTuneSession]
   );
 
   const handleUndoTune = () => {
-    if (!undoSnapshot) return;
-    setSettings(undoSnapshot);
-    setUndoSnapshot(null);
-    setTuneSummary(null);
-    setTuneSource(null);
-    setTuneError(null);
+    if (tune.phase !== 'tuned') return;
+    setSettings(tune.snapshot);
+    dispatchTune({ type: 'UNDO' });
   };
 
   const handleSavePalette = (palette: PaletteDefinition) => {
@@ -615,7 +650,7 @@ export default function App() {
                 tuneSummary={tuneSummary}
                 tuneSource={tuneSource}
                 tuneError={tuneError}
-                canUndoTune={!!undoSnapshot}
+                canUndoTune={canUndoTune}
                 onUpdateSettings={handleUpdateSettings}
                 onChangePhosphorTheme={setPhosphorTheme}
                 onAutoTune={handleAutoTune}
@@ -663,7 +698,7 @@ export default function App() {
               tuneSummary={tuneSummary}
               tuneSource={tuneSource}
               tuneError={tuneError}
-              canUndoTune={!!undoSnapshot}
+              canUndoTune={canUndoTune}
               onUpdateSettings={handleUpdateSettings}
               onChangePhosphorTheme={setPhosphorTheme}
               onAutoTune={handleAutoTune}
@@ -757,7 +792,12 @@ export default function App() {
       )}
 
       {/* Offline and update notices share one stack so they can never overlap. */}
-      <div className="pg-safe-x pg-above-bar pointer-events-none fixed inset-x-3 z-40 flex flex-col items-start gap-2 lg:inset-x-auto lg:right-4 lg:items-end">
+      {/* Hidden on mobile while a sheet is up: the sheet occupies the same strip. */}
+      <div
+        className={`pg-safe-x pg-above-bar pointer-events-none fixed inset-x-3 z-40 flex flex-col items-start gap-2 lg:inset-x-auto lg:right-4 lg:flex lg:items-end ${
+          mobileSheet !== 'none' ? 'max-lg:hidden' : ''
+        }`}
+      >
         <OfflineIndicator />
         <PWAUpdateToast />
       </div>
